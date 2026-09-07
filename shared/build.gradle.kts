@@ -49,10 +49,16 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
-            implementation(libs.compose.components.resources)
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+            implementation(libs.koin.core)
+            implementation(project(":core:common"))
+            implementation(project(":core:network"))
+            implementation(project(":core:database"))
+            implementation(project(":core:mvi"))
+            implementation(project(":core:ui"))
+            implementation(project(":core:navigation"))
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
