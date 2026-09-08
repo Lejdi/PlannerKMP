@@ -59,6 +59,9 @@ kotlin {
             implementation(project(":core:mvi"))
             implementation(project(":core:ui"))
             implementation(project(":core:navigation"))
+            implementation(project(":feature:tasks"))
+            implementation(project(":feature:grocery"))
+            implementation(libs.koin.compose)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
