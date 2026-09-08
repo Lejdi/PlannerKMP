@@ -24,7 +24,10 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":core:common"))
+            // api, not implementation: safeQuery's signature takes CoroutineDispatchers
+            // and returns AppResult, both from core:common, so consumers need them on
+            // their compile classpath transitively.
+            api(project(":core:common"))
             implementation(libs.sqldelight.runtime)
             implementation(libs.koin.core)
         }

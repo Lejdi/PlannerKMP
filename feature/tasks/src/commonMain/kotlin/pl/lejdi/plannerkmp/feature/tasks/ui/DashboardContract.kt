@@ -1,6 +1,5 @@
 package pl.lejdi.plannerkmp.feature.tasks.ui
 
-import kotlinx.datetime.LocalDate
 import pl.lejdi.plannerkmp.core.mvi.MviEffect
 import pl.lejdi.plannerkmp.core.mvi.MviEvent
 import pl.lejdi.plannerkmp.core.mvi.MviState
@@ -9,7 +8,6 @@ import pl.lejdi.plannerkmp.feature.tasks.domain.Task
 
 data class DashboardState(
     val isLoading: Boolean = true,
-    val today: LocalDate? = null,
     val days: List<DashboardDay> = emptyList(),
     val revealedTaskId: Long? = null,
 ) : MviState

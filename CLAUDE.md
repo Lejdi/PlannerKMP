@@ -36,7 +36,7 @@ Module layout, declared in `settings.gradle.kts`:
   logic.
 - **`:shared`** — the composition root. `Koin.kt` aggregates every module's
   Koin module via `initKoin()`; `App.kt` is the Compose root. It depends on
-  every `:core:*` module (and, once one exists, every `:feature:*` module).
+  every `:core:*` and every `:feature:*` module.
 - **`:core:common`** — pure Kotlin: `AppResult`/`DomainError`, `CoroutineDispatchers`,
   `TodayProvider` (the single source of "today" — a Koin-swappable wrapper
   over `kotlinx.datetime.Clock.System`, used anywhere a feature needs the
@@ -51,7 +51,11 @@ Module layout, declared in `settings.gradle.kts`:
   test fake, and a `SqlDelightKeyValueCache` real implementation backed by
   this module's own small `keyValueEntry` SQLDelight schema — the one schema
   this module owns itself; every other schema belongs to the feature module
-  that needs it). Feature modules apply the SQLDelight Gradle plugin
+  that needs it). Also `safeQuery(dispatchers) { }`, the datasource-side
+  counterpart to `safeRequest`: it runs the block on `dispatchers.io` under a
+  5s timeout and maps the outcome (exceptions and timeouts included) to
+  `AppResult<T>`, plus `checkSingleRowAffected()` for asserting a mutation's
+  own returned row count. Feature modules apply the SQLDelight Gradle plugin
   themselves for their own `.sq` schema and build their generated `Database`
   from a driver obtained here.
 - **`:core:mvi`** — `MviState`/`MviEvent`/`MviEffect` marker interfaces,
@@ -65,9 +69,13 @@ Module layout, declared in `settings.gradle.kts`:
   `NavEntryProviderContributor` (the contract each feature implements and
   Koin-multibinds so `:shared` can build one `entryProvider` via
   `getKoin().getAll<NavEntryProviderContributor>()` without knowing which
-  features exist). **Not yet wired into `:shared`'s `App()`** — there's no
-  screen to navigate to until the first feature module exists; wire
-  `NavDisplay` up then.
+  features exist). Wired into `:shared`'s `App()`: a bottom-nav `Scaffold`
+  with a Tasks and a Grocery tab, each owning its own `Navigator` and
+  `NavDisplay` but sharing the one Koin-built `entryProvider`. Both
+  `NavDisplay`s pass `entryDecorators` including
+  `rememberViewModelStoreNavEntryDecorator()` — without it every nav entry
+  would share the Activity's `ViewModelStore` and so share one ViewModel
+  instance per class.
 - **`:feature:tasks`** — TODO/task list: `Task`/`TaskType` domain model,
   `GetTasksForDashboard` (8-day dashboard filter/sort), `MarkTaskComplete`,
   `UpdateTasksDates` (daily cleanup job run from the dashboard ViewModel's
@@ -97,4 +105,4 @@ Gradle version fixes it.
 
 Dependency versions and plugin IDs are centralized in `gradle/libs.versions.toml` (a standard Gradle version catalog) and referenced everywhere as `libs.xxx` / `libs.plugins.xxx` — add new dependencies there rather than hardcoding coordinates in module `build.gradle.kts` files.
 
-Toolchain: Gradle 9.1 (via wrapper), Kotlin 2.4.10, AGP 9.0.1, JVM target 11 for Kotlin/Android compilation, Java toolchain 21 (Azul) for the Gradle daemon itself (`gradle/gradle-daemon-jvm.properties`). Android `compileSdk`/`targetSdk` 36, `minSdk` 24. Ktor 3.5.2, Koin 4.1.1 (BOM), SQLDelight 2.3.2, Navigation 3 1.1.1, kotlinx.serialization 1.11.0, kotlinx.coroutines 1.11.0.
+Toolchain: Gradle 9.1 (via wrapper), Kotlin 2.4.10, AGP 9.0.1, JVM target 11 for Kotlin/Android compilation, Java toolchain 21 (Azul) for the Gradle daemon itself (`gradle/gradle-daemon-jvm.properties`). Android `compileSdk`/`targetSdk` 36, `minSdk` 24. Ktor 3.5.2, Koin 4.1.1 (BOM), SQLDelight 2.3.2, Navigation 3 1.1.1, kotlinx.serialization 1.11.0, kotlinx.coroutines 1.11.0, kotlinx-datetime 0.6.1.

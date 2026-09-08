@@ -4,6 +4,7 @@ import kotlinx.datetime.LocalDate
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import pl.lejdi.plannerkmp.core.database.DatabaseDriverFactory
 import pl.lejdi.plannerkmp.core.database.KeyValueCache
@@ -26,6 +27,8 @@ import pl.lejdi.plannerkmp.feature.tasks.domain.UpdateTasksDates
 import pl.lejdi.plannerkmp.feature.tasks.ui.DashboardViewModel
 import pl.lejdi.plannerkmp.feature.tasks.ui.TaskEditViewModel
 
+private const val LAST_CLEANUP_DATE_CACHE = "lastCleanupDate"
+
 val tasksModule = module {
     single {
         TasksDatabase(
@@ -38,7 +41,9 @@ val tasksModule = module {
         )
     }
     single { get<TasksDatabase>().taskEntityQueries }
-    single<KeyValueCache<Unit, LocalDate>> {
+    // Qualified because Koin keys generic types by their erased class: a second
+    // KeyValueCache<*, *> registered anywhere in the app would silently collide.
+    single<KeyValueCache<Unit, LocalDate>>(named(LAST_CLEANUP_DATE_CACHE)) {
         SqlDelightKeyValueCache(
             queries = get(),
             encodeKey = { "lastCleanupDate" },
@@ -46,7 +51,9 @@ val tasksModule = module {
             deserialize = { LocalDate.parse(it) },
         )
     }
-    single<TasksDatasource> { SqlDelightTasksDatasource(get(), get(), get()) }
+    single<TasksDatasource> {
+        SqlDelightTasksDatasource(get(), get(named(LAST_CLEANUP_DATE_CACHE)), get())
+    }
 
     factory { GetTasksForDashboard(get(), get()) }
     factory { MarkTaskComplete(get()) }

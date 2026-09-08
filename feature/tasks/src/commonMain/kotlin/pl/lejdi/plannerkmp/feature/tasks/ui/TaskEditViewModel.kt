@@ -68,7 +68,13 @@ class TaskEditViewModel(
             startDate = if (current.type == TaskType.Asap) todayProvider.today() else current.startDate ?: todayProvider.today(),
             endDate = if (current.type == TaskType.Periodic) current.endDate else null,
             hour = current.hour,
-            daysInterval = if (current.type == TaskType.Periodic) current.daysInterval.toIntOrNull() ?: 0 else 0,
+            // A negative interval would walk UpdateTasksDates' catch-up math backwards
+            // forever, so anything not strictly positive falls back to 0.
+            daysInterval = if (current.type == TaskType.Periodic) {
+                current.daysInterval.toIntOrNull()?.takeIf { it > 0 } ?: 0
+            } else {
+                0
+            },
             asap = current.type == TaskType.Asap,
         )
 

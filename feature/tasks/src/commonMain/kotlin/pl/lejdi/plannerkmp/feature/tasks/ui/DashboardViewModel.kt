@@ -41,9 +41,7 @@ class DashboardViewModel(
                 sendEffect(DashboardEffect.ShowError(cleanupResult.error.message))
             }
             when (val result = getTasksForDashboard(Unit)) {
-                is AppResult.Success -> setState {
-                    copy(isLoading = false, days = result.data, today = result.data.firstOrNull()?.date)
-                }
+                is AppResult.Success -> setState { copy(isLoading = false, days = result.data) }
                 is AppResult.Failure -> {
                     setState { copy(isLoading = false) }
                     sendEffect(DashboardEffect.ShowError(result.error.message))

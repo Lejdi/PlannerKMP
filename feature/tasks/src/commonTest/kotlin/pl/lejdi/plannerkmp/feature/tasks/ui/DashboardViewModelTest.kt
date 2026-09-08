@@ -53,7 +53,7 @@ class DashboardViewModelTest {
 
         assertFalse(viewModel.state.value.isLoading)
         assertEquals(8, viewModel.state.value.days.size)
-        assertEquals(today, viewModel.state.value.today)
+        assertEquals(today, viewModel.state.value.days.first().date)
     }
 
     @Test
