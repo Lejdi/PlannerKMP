@@ -1,0 +1,28 @@
+CREATE TABLE taskEntity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    startDate TEXT AS kotlinx.datetime.LocalDate NOT NULL,
+    endDate TEXT AS kotlinx.datetime.LocalDate,
+    hour TEXT AS kotlinx.datetime.LocalTime,
+    daysInterval INTEGER NOT NULL DEFAULT 0,
+    asap INTEGER NOT NULL DEFAULT 0
+);
+
+selectAll:
+SELECT * FROM taskEntity;
+
+insert:
+INSERT INTO taskEntity(name, description, startDate, endDate, hour, daysInterval, asap)
+VALUES (:name, :description, :startDate, :endDate, :hour, :daysInterval, :asap);
+
+update:
+UPDATE taskEntity
+SET name = :name, description = :description, startDate = :startDate, endDate = :endDate, hour = :hour, daysInterval = :daysInterval, asap = :asap
+WHERE id = :id;
+
+deleteById:
+DELETE FROM taskEntity WHERE id = :id;
+
+changes:
+SELECT changes();
