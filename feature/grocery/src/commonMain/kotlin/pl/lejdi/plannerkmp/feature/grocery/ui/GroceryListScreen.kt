@@ -1,6 +1,5 @@
 package pl.lejdi.plannerkmp.feature.grocery.ui
 
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,9 +14,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
@@ -28,6 +31,15 @@ import pl.lejdi.plannerkmp.feature.grocery.domain.GroceryItem
 @Composable
 fun GroceryListScreen(viewModel: GroceryListViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(viewModel) {
+        viewModel.effect.collect { effect ->
+            when (effect) {
+                is GroceryListEffect.ShowError -> errorMessage = effect.message
+            }
+        }
+    }
 
     Scaffold(
         floatingActionButton = {
@@ -38,6 +50,15 @@ fun GroceryListScreen(viewModel: GroceryListViewModel = koinViewModel()) {
     ) { padding ->
         if (state.isLoading) {
             LoadingView(modifier = Modifier.padding(padding))
+            return@Scaffold
+        }
+
+        errorMessage?.let { message ->
+            ErrorView(
+                message = message,
+                modifier = Modifier.padding(padding),
+                onRetry = { errorMessage = null },
+            )
             return@Scaffold
         }
 
@@ -104,20 +125,23 @@ private fun EditRow(state: GroceryListState, viewModel: GroceryListViewModel) {
 
 @Composable
 private fun GroceryRow(item: GroceryItem, viewModel: GroceryListViewModel) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp)
-            .pointerInput(item.id) {
-                detectTapGestures(
-                    onLongPress = { viewModel.onEvent(GroceryListEvent.EditExpandClicked(item)) },
-                    onTap = { viewModel.onEvent(GroceryListEvent.CompleteItem(item.id)) },
-                )
-            },
-    ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            Text(item.name)
-            item.description?.let { Text(it) }
+    // Completing an item deletes it with no undo, so it needs its own labelled
+    // button — it used to fire from a bare tap anywhere on the card.
+    Card(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+        Row(
+            modifier = Modifier.padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.name)
+                item.description?.let { Text(it) }
+            }
+            Button(onClick = { viewModel.onEvent(GroceryListEvent.EditExpandClicked(item)) }) {
+                Text("Edit")
+            }
+            Button(onClick = { viewModel.onEvent(GroceryListEvent.CompleteItem(item.id)) }) {
+                Text("Done")
+            }
         }
     }
 }

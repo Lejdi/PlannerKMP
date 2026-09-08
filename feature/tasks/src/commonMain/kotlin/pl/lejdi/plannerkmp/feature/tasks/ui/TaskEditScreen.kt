@@ -11,11 +11,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import pl.lejdi.plannerkmp.core.ui.components.ErrorView
 import pl.lejdi.plannerkmp.feature.tasks.domain.Task
 import pl.lejdi.plannerkmp.feature.tasks.domain.TaskType
 
@@ -26,15 +30,27 @@ fun TaskEditScreen(
     viewModel: TaskEditViewModel = koinViewModel { parametersOf(task) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffectCollectEffects(viewModel) { effect ->
         when (effect) {
             is TaskEditEffect.NavigateBack -> onNavigateBack()
-            is TaskEditEffect.ShowError -> Unit
+            is TaskEditEffect.ShowError -> errorMessage = effect.message
         }
     }
 
     Scaffold { padding ->
+        errorMessage?.let { message ->
+            // The form's own values live in the ViewModel's state, so dismissing
+            // brings the user back to exactly what they were editing.
+            ErrorView(
+                message = message,
+                modifier = Modifier.padding(padding),
+                onRetry = { errorMessage = null },
+            )
+            return@Scaffold
+        }
+
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
             OutlinedTextField(
                 value = state.name,

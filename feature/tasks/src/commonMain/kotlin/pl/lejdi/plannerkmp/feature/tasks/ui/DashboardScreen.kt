@@ -16,6 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -25,6 +28,7 @@ import pl.lejdi.plannerkmp.core.mvi.BaseViewModel
 import pl.lejdi.plannerkmp.core.mvi.MviEffect
 import pl.lejdi.plannerkmp.core.mvi.MviEvent
 import pl.lejdi.plannerkmp.core.mvi.MviState
+import pl.lejdi.plannerkmp.core.ui.components.ErrorView
 import pl.lejdi.plannerkmp.core.ui.components.LoadingView
 import pl.lejdi.plannerkmp.feature.tasks.domain.DashboardDay
 import pl.lejdi.plannerkmp.feature.tasks.domain.Task
@@ -46,12 +50,13 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffectCollectEffects(viewModel) { effect ->
         when (effect) {
             is DashboardEffect.NavigateToAddTask -> onNavigateToAddTask()
             is DashboardEffect.NavigateToEditTask -> onNavigateToEditTask(effect.task)
-            is DashboardEffect.ShowError -> Unit
+            is DashboardEffect.ShowError -> errorMessage = effect.message
         }
     }
 
@@ -64,6 +69,15 @@ fun DashboardScreen(
     ) { padding ->
         if (state.isLoading) {
             LoadingView(modifier = Modifier.padding(padding))
+            return@Scaffold
+        }
+
+        errorMessage?.let { message ->
+            ErrorView(
+                message = message,
+                modifier = Modifier.padding(padding),
+                onRetry = { errorMessage = null },
+            )
             return@Scaffold
         }
 
