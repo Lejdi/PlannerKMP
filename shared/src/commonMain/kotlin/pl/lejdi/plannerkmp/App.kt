@@ -13,8 +13,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import org.koin.compose.getKoin
 import pl.lejdi.plannerkmp.core.navigation.LocalNavigator
@@ -66,6 +68,10 @@ fun App() {
                         NavDisplay(
                             backStack = tasksNavigator.backStack,
                             onBack = { tasksNavigator.goBack() },
+                            entryDecorators = listOf(
+                                rememberSaveableStateHolderNavEntryDecorator(),
+                                rememberViewModelStoreNavEntryDecorator(),
+                            ),
                             entryProvider = entryProvider,
                         )
                     }
@@ -73,6 +79,10 @@ fun App() {
                         NavDisplay(
                             backStack = groceryNavigator.backStack,
                             onBack = { groceryNavigator.goBack() },
+                            entryDecorators = listOf(
+                                rememberSaveableStateHolderNavEntryDecorator(),
+                                rememberViewModelStoreNavEntryDecorator(),
+                            ),
                             entryProvider = entryProvider,
                         )
                     }

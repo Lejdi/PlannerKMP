@@ -52,6 +52,11 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+            // Supplies rememberViewModelStoreNavEntryDecorator(), which gives every NavEntry its
+            // own ViewModelStoreOwner. Without it NavDisplay's default entryDecorators only hold a
+            // SaveableStateHolder, so koinViewModel() would resolve one Activity-scoped store and
+            // retain a single ViewModel instance across every nav entry.
+            implementation(libs.androidx.lifecycle.viewmodelNavigation3)
             implementation(libs.koin.core)
             implementation(project(":core:common"))
             implementation(project(":core:network"))
