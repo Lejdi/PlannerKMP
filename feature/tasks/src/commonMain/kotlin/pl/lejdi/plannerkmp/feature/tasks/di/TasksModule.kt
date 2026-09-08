@@ -46,7 +46,7 @@ val tasksModule = module {
             deserialize = { LocalDate.parse(it) },
         )
     }
-    single<TasksDatasource> { SqlDelightTasksDatasource(get(), get()) }
+    single<TasksDatasource> { SqlDelightTasksDatasource(get(), get(), get()) }
 
     factory { GetTasksForDashboard(get(), get()) }
     factory { MarkTaskComplete(get()) }

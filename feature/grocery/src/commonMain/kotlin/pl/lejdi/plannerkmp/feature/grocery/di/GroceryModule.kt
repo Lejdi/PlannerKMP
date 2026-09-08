@@ -19,7 +19,7 @@ import pl.lejdi.plannerkmp.feature.grocery.ui.GroceryListViewModel
 val groceryModule = module {
     single { GroceryDatabase(get<DatabaseDriverFactory>().createDriver(GroceryDatabase.Schema, "grocery.db")) }
     single { get<GroceryDatabase>().groceryItemEntityQueries }
-    single<GroceryDatasource> { SqlDelightGroceryDatasource(get()) }
+    single<GroceryDatasource> { SqlDelightGroceryDatasource(get(), get()) }
 
     factory { GetGroceryItems(get()) }
     factory { AddGrocery(get()) }

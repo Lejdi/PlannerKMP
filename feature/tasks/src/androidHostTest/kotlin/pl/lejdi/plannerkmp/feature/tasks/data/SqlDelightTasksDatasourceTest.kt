@@ -1,10 +1,13 @@
 package pl.lejdi.plannerkmp.feature.tasks.data
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import pl.lejdi.plannerkmp.core.common.AppResult
+import pl.lejdi.plannerkmp.core.common.CoroutineDispatchers
 import pl.lejdi.plannerkmp.core.database.InMemoryKeyValueCache
 import pl.lejdi.plannerkmp.feature.tasks.domain.Task
 import kotlin.test.AfterTest
@@ -42,7 +45,14 @@ class SqlDelightTasksDatasourceTest {
                 hourAdapter = LocalTimeColumnAdapter,
             ),
         ).taskEntityQueries
-        datasource = SqlDelightTasksDatasource(queries, InMemoryKeyValueCache())
+        datasource = SqlDelightTasksDatasource(
+            queries,
+            InMemoryKeyValueCache(),
+            // Unconfined as the io dispatcher: safeQuery's withContext then runs the
+            // blocking JDBC call inline on the test thread, so runTest never sees an
+            // idle scheduler and fast-forwards into safeQuery's 5s timeout.
+            TestCoroutineDispatchers(Dispatchers.Unconfined),
+        )
     }
 
     @AfterTest
@@ -112,4 +122,10 @@ class SqlDelightTasksDatasourceTest {
 
         assertEquals(AppResult.Success(LocalDate(2026, 9, 8)), result)
     }
+}
+
+private class TestCoroutineDispatchers(private val dispatcher: CoroutineDispatcher) : CoroutineDispatchers {
+    override val main: CoroutineDispatcher get() = dispatcher
+    override val io: CoroutineDispatcher get() = dispatcher
+    override val default: CoroutineDispatcher get() = dispatcher
 }

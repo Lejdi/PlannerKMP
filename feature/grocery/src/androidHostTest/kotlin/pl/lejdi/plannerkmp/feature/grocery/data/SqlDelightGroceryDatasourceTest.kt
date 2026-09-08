@@ -1,8 +1,11 @@
 package pl.lejdi.plannerkmp.feature.grocery.data
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import pl.lejdi.plannerkmp.core.common.AppResult
+import pl.lejdi.plannerkmp.core.common.CoroutineDispatchers
 import pl.lejdi.plannerkmp.feature.grocery.domain.GroceryItem
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -19,7 +22,13 @@ class SqlDelightGroceryDatasourceTest {
     fun setUp() {
         driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         GroceryDatabase.Schema.create(driver)
-        datasource = SqlDelightGroceryDatasource(GroceryDatabase(driver).groceryItemEntityQueries)
+        datasource = SqlDelightGroceryDatasource(
+            GroceryDatabase(driver).groceryItemEntityQueries,
+            // Unconfined as the io dispatcher: safeQuery's withContext then runs the
+            // blocking JDBC call inline on the test thread, so runTest never sees an
+            // idle scheduler and fast-forwards into safeQuery's 5s timeout.
+            TestCoroutineDispatchers(Dispatchers.Unconfined),
+        )
     }
 
     @AfterTest
@@ -74,4 +83,10 @@ class SqlDelightGroceryDatasourceTest {
 
         assertTrue(result is AppResult.Failure)
     }
+}
+
+private class TestCoroutineDispatchers(private val dispatcher: CoroutineDispatcher) : CoroutineDispatchers {
+    override val main: CoroutineDispatcher get() = dispatcher
+    override val io: CoroutineDispatcher get() = dispatcher
+    override val default: CoroutineDispatcher get() = dispatcher
 }
