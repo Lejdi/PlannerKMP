@@ -2,6 +2,7 @@ package pl.lejdi.plannerkmp.feature.grocery.ui
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -134,5 +135,66 @@ class GroceryListViewModelTest {
 
         assertTrue(datasource.items.isEmpty())
         assertTrue(viewModel.state.value.items.isEmpty())
+    }
+
+    @Test
+    fun loadItemsFailureShowsErrorEffectAndStopsLoading() = runTest {
+        val datasource = FakeGroceryDatasource(
+            initialItems = listOf(GroceryItem(id = 1, name = "Milk", description = null)),
+        )
+        datasource.failNextCall = true
+
+        val viewModel = viewModel(datasource)
+
+        assertFalse(viewModel.state.value.isLoading)
+        assertEquals(GroceryListEffect.ShowError("fake failure"), viewModel.effect.first())
+    }
+
+    @Test
+    fun addConfirmFailureKeepsRowExpandedAndDoesNotAddItem() = runTest {
+        val datasource = FakeGroceryDatasource()
+        val viewModel = viewModel(datasource)
+        viewModel.onEvent(GroceryListEvent.AddExpandClicked)
+        viewModel.onEvent(GroceryListEvent.AddNameChanged("Bread"))
+        datasource.failNextCall = true
+
+        viewModel.onEvent(GroceryListEvent.AddConfirmClicked)
+
+        assertTrue(datasource.items.isEmpty())
+        assertTrue(viewModel.state.value.isAddExpanded)
+        assertEquals("Bread", viewModel.state.value.addName)
+        assertEquals(GroceryListEffect.ShowError("fake failure"), viewModel.effect.first())
+    }
+
+    @Test
+    fun editConfirmFailureKeepsEditingStateAndDoesNotUpdateItem() = runTest {
+        val datasource = FakeGroceryDatasource(
+            initialItems = listOf(GroceryItem(id = 1, name = "Milk", description = null)),
+        )
+        val viewModel = viewModel(datasource)
+        viewModel.onEvent(GroceryListEvent.EditExpandClicked(datasource.items.single()))
+        viewModel.onEvent(GroceryListEvent.EditNameChanged("Oat milk"))
+        datasource.failNextCall = true
+
+        viewModel.onEvent(GroceryListEvent.EditConfirmClicked)
+
+        assertEquals("Milk", datasource.items.single().name)
+        assertEquals(1, viewModel.state.value.editingItemId)
+        assertEquals("Oat milk", viewModel.state.value.editName)
+        assertEquals(GroceryListEffect.ShowError("fake failure"), viewModel.effect.first())
+    }
+
+    @Test
+    fun completeItemFailureKeepsItem() = runTest {
+        val datasource = FakeGroceryDatasource(
+            initialItems = listOf(GroceryItem(id = 1, name = "Milk", description = null)),
+        )
+        val viewModel = viewModel(datasource)
+        datasource.failNextCall = true
+
+        viewModel.onEvent(GroceryListEvent.CompleteItem(1))
+
+        assertEquals(1, datasource.items.size)
+        assertEquals(GroceryListEffect.ShowError("fake failure"), viewModel.effect.first())
     }
 }
