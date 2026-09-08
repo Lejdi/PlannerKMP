@@ -2,6 +2,7 @@ package pl.lejdi.plannerkmp.feature.tasks.ui
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -216,5 +217,33 @@ class TaskEditViewModelTest {
         viewModel.onEvent(TaskEditEvent.DeleteClicked)
 
         assertTrue(datasource.tasks.isEmpty())
+    }
+
+    @Test
+    fun saveFailureShowsErrorEffectAndDoesNotNavigateBack() = runTest {
+        val datasource = FakeTasksDatasource()
+        val viewModel = viewModel(datasource)
+        viewModel.onEvent(TaskEditEvent.NameChanged("Call mom"))
+        datasource.failNextCall = true
+
+        viewModel.onEvent(TaskEditEvent.SaveClicked)
+
+        // The effect channel hands back effects in order, so ShowError being first
+        // is also proof no NavigateBack was sent.
+        assertEquals(TaskEditEffect.ShowError("fake failure"), viewModel.effect.first())
+        assertTrue(datasource.tasks.isEmpty())
+    }
+
+    @Test
+    fun deleteFailureShowsErrorEffectAndDoesNotNavigateBack() = runTest {
+        val existing = Task(1, "Task", null, today, null, null, 0, false)
+        val datasource = FakeTasksDatasource(initialTasks = listOf(existing))
+        val viewModel = viewModel(datasource, initialTask = existing)
+        datasource.failNextCall = true
+
+        viewModel.onEvent(TaskEditEvent.DeleteClicked)
+
+        assertEquals(TaskEditEffect.ShowError("fake failure"), viewModel.effect.first())
+        assertEquals(listOf(existing), datasource.tasks)
     }
 }

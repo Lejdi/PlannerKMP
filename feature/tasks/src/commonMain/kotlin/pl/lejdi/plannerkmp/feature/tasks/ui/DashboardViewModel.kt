@@ -34,7 +34,12 @@ class DashboardViewModel(
     private fun loadDashboard() {
         viewModelScope.launch {
             setState { copy(isLoading = true) }
-            updateTasksDates(Unit)
+            // A failed cleanup is worth telling the user about, but it shouldn't stop
+            // them seeing the dashboard, so the load still runs on possibly stale rows.
+            val cleanupResult = updateTasksDates(Unit)
+            if (cleanupResult is AppResult.Failure) {
+                sendEffect(DashboardEffect.ShowError(cleanupResult.error.message))
+            }
             when (val result = getTasksForDashboard(Unit)) {
                 is AppResult.Success -> setState {
                     copy(isLoading = false, days = result.data, today = result.data.firstOrNull()?.date)

@@ -2,6 +2,7 @@ package pl.lejdi.plannerkmp.feature.tasks.ui
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -98,5 +99,31 @@ class DashboardViewModelTest {
         viewModel.onEvent(DashboardEvent.CompleteTask(oneTimeTask))
 
         assertEquals(0, viewModel.state.value.days.sumOf { it.tasks.size })
+    }
+
+    @Test
+    fun cleanupFailureOnLoadShowsErrorEffectAndStillLoadsTheDashboard() = runTest {
+        // The first datasource call of the load is the cleanup's getLastCleanupDate().
+        val datasource = FakeTasksDatasource()
+        datasource.failNextCall = true
+
+        val viewModel = viewModel(datasource)
+
+        assertEquals(DashboardEffect.ShowError("fake failure"), viewModel.effect.first())
+        assertFalse(viewModel.state.value.isLoading)
+        assertEquals(8, viewModel.state.value.days.size)
+    }
+
+    @Test
+    fun completeTaskFailureShowsErrorEffectAndKeepsTheTask() = runTest {
+        val oneTimeTask = Task(1, "Task", null, today, null, null, 0, false)
+        val datasource = FakeTasksDatasource(initialTasks = listOf(oneTimeTask))
+        val viewModel = viewModel(datasource)
+        datasource.failNextCall = true
+
+        viewModel.onEvent(DashboardEvent.CompleteTask(oneTimeTask))
+
+        assertEquals(DashboardEffect.ShowError("fake failure"), viewModel.effect.first())
+        assertEquals(listOf(oneTimeTask), datasource.tasks)
     }
 }
