@@ -23,8 +23,12 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(libs.navigation3.ui)
-            implementation(libs.compose.runtime)
+            // api, not implementation: NavKey and EntryProviderScope (from navigation3-ui)
+            // appear in this module's own public API (NavEntryProviderContributor.contribute(),
+            // Navigator's constructor/backStack), so consumers like :shared need them on their
+            // compile classpath transitively, not just at core:navigation's own compile time.
+            api(libs.navigation3.ui)
+            api(libs.compose.runtime)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
