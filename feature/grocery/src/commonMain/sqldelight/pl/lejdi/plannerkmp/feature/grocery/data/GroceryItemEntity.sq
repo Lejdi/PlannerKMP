@@ -1,0 +1,20 @@
+CREATE TABLE groceryItemEntity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT
+);
+
+selectAll:
+SELECT * FROM groceryItemEntity;
+
+insert:
+INSERT INTO groceryItemEntity(name, description) VALUES (:name, :description);
+
+update:
+UPDATE groceryItemEntity SET name = :name, description = :description WHERE id = :id;
+
+deleteById:
+DELETE FROM groceryItemEntity WHERE id = :id;
+
+changes:
+SELECT changes();
