@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidMultiplatformLibrary)
+    alias(libs.plugins.sqldelight)
 }
 
 kotlin {
@@ -37,6 +38,19 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
+        }
+        getByName("androidHostTest") {
+            dependencies {
+                implementation(libs.sqldelight.sqliteDriver)
+            }
+        }
+    }
+}
+
+sqldelight {
+    databases {
+        create("Database") {
+            packageName.set("pl.lejdi.plannerkmp.core.database")
         }
     }
 }
