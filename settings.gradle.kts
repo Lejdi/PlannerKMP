@@ -36,3 +36,5 @@ include(":core:database")
 include(":core:mvi")
 include(":core:ui")
 include(":core:navigation")
+
+include(":feature:grocery")
