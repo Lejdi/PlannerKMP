@@ -38,3 +38,4 @@ include(":core:ui")
 include(":core:navigation")
 
 include(":feature:grocery")
+include(":feature:tasks")
