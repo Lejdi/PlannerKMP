@@ -1,6 +1,7 @@
 package pl.lejdi.plannerkmp.feature.grocery.data
 
 import pl.lejdi.plannerkmp.core.common.AppResult
+import pl.lejdi.plannerkmp.core.database.checkSingleRowAffected
 import pl.lejdi.plannerkmp.core.database.safeQuery
 import pl.lejdi.plannerkmp.feature.grocery.domain.GroceryItem
 
@@ -13,21 +14,18 @@ class SqlDelightGroceryDatasource(
     }
 
     override suspend fun addItem(item: GroceryItem): AppResult<Unit> = safeQuery {
-        queries.insert(name = item.name, description = item.description)
-        val rowsAffected = queries.changes().executeAsOne()
-        check(rowsAffected == 1L) { "Expected 1 row inserted, got $rowsAffected" }
+        val rowsAffected = queries.insert(name = item.name, description = item.description).await()
+        checkSingleRowAffected(rowsAffected, "grocery item insert")
     }
 
     override suspend fun editItem(item: GroceryItem): AppResult<Unit> = safeQuery {
-        queries.update(name = item.name, description = item.description, id = item.id)
-        val rowsAffected = queries.changes().executeAsOne()
-        check(rowsAffected == 1L) { "Expected 1 row updated, got $rowsAffected" }
+        val rowsAffected = queries.update(name = item.name, description = item.description, id = item.id).await()
+        checkSingleRowAffected(rowsAffected, "grocery item update")
     }
 
     override suspend fun deleteItem(id: Long): AppResult<Unit> = safeQuery {
-        queries.deleteById(id)
-        val rowsAffected = queries.changes().executeAsOne()
-        check(rowsAffected == 1L) { "Expected 1 row deleted, got $rowsAffected" }
+        val rowsAffected = queries.deleteById(id).await()
+        checkSingleRowAffected(rowsAffected, "grocery item delete")
     }
 }
 

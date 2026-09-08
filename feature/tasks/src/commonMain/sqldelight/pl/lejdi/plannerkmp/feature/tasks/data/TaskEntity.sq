@@ -23,6 +23,3 @@ WHERE id = :id;
 
 deleteById:
 DELETE FROM taskEntity WHERE id = :id;
-
-changes:
-SELECT changes();

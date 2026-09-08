@@ -3,6 +3,7 @@ package pl.lejdi.plannerkmp.feature.tasks.data
 import kotlinx.datetime.LocalDate
 import pl.lejdi.plannerkmp.core.common.AppResult
 import pl.lejdi.plannerkmp.core.database.KeyValueCache
+import pl.lejdi.plannerkmp.core.database.checkSingleRowAffected
 import pl.lejdi.plannerkmp.core.database.safeQuery
 import pl.lejdi.plannerkmp.feature.tasks.domain.Task
 
@@ -16,7 +17,7 @@ class SqlDelightTasksDatasource(
     }
 
     override suspend fun addTask(task: Task): AppResult<Unit> = safeQuery {
-        queries.insert(
+        val rowsAffected = queries.insert(
             name = task.name,
             description = task.description,
             startDate = task.startDate,
@@ -24,13 +25,12 @@ class SqlDelightTasksDatasource(
             hour = task.hour,
             daysInterval = task.daysInterval.toLong(),
             asap = if (task.asap) 1L else 0L,
-        )
-        val rowsAffected = queries.changes().executeAsOne()
-        check(rowsAffected == 1L) { "Expected 1 row inserted, got $rowsAffected" }
+        ).await()
+        checkSingleRowAffected(rowsAffected, "task insert")
     }
 
     override suspend fun editTask(task: Task): AppResult<Unit> = safeQuery {
-        queries.update(
+        val rowsAffected = queries.update(
             id = task.id,
             name = task.name,
             description = task.description,
@@ -39,15 +39,13 @@ class SqlDelightTasksDatasource(
             hour = task.hour,
             daysInterval = task.daysInterval.toLong(),
             asap = if (task.asap) 1L else 0L,
-        )
-        val rowsAffected = queries.changes().executeAsOne()
-        check(rowsAffected == 1L) { "Expected 1 row updated, got $rowsAffected" }
+        ).await()
+        checkSingleRowAffected(rowsAffected, "task update")
     }
 
     override suspend fun deleteTask(id: Long): AppResult<Unit> = safeQuery {
-        queries.deleteById(id)
-        val rowsAffected = queries.changes().executeAsOne()
-        check(rowsAffected == 1L) { "Expected 1 row deleted, got $rowsAffected" }
+        val rowsAffected = queries.deleteById(id).await()
+        checkSingleRowAffected(rowsAffected, "task delete")
     }
 
     override suspend fun getLastCleanupDate(): AppResult<LocalDate?> = safeQuery {

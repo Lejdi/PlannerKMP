@@ -15,6 +15,3 @@ UPDATE groceryItemEntity SET name = :name, description = :description WHERE id =
 
 deleteById:
 DELETE FROM groceryItemEntity WHERE id = :id;
-
-changes:
-SELECT changes();
