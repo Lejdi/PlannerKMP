@@ -22,6 +22,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DashboardViewModelTest {
@@ -56,12 +57,17 @@ class DashboardViewModelTest {
 
     @Test
     fun runsCleanupBeforeLoadingSoStaleTasksAreAlreadyGone() = runTest {
+        // A one-time task with a past startDate is deleted by the cleanup rule (daysInterval == 0,
+        // not asap, startDate < today). Asserting against the datasource's own state (rather than the
+        // dashboard's returned days) is what actually proves cleanup ran as part of ViewModel creation:
+        // the dashboard's forward-looking 8-day window would never show this task either way.
         val staleTask = Task(1, "Stale", null, today.minus(5, DateTimeUnit.DAY), null, null, 0, false)
         val datasource = FakeTasksDatasource(initialTasks = listOf(staleTask))
 
-        val viewModel = viewModel(datasource)
+        viewModel(datasource)
 
-        assertEquals(0, viewModel.state.value.days.sumOf { it.tasks.size })
+        assertTrue(datasource.tasks.isEmpty(), "cleanup should have deleted the stale task from the datasource")
+        assertEquals(today, datasource.lastCleanupDate)
     }
 
     @Test
