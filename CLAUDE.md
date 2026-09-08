@@ -8,8 +8,8 @@ This is a Kotlin Multiplatform (KMP) + Compose Multiplatform app. `androidApp`
 and `iosApp` are thin entry points; all logic and UI live in shared Kotlin
 modules. The architecture is pure MVI (one `BaseViewModel` per screen calling
 usecases, which call datasources), with Koin for DI, Ktor for networking,
-SQLDelight for caching, and one Gradle module per feature. There is no real
-feature module yet — see
+SQLDelight for caching, and one Gradle module per feature. Two feature modules
+exist: `:feature:tasks` (tasks/TODOs) and `:feature:grocery` (grocery list) — see
 `docs/superpowers/specs/2026-09-07-base-architecture-design.md` for the full
 design and rationale behind the base/core module split below.
 
@@ -37,19 +37,23 @@ Module layout, declared in `settings.gradle.kts`:
 - **`:shared`** — the composition root. `Koin.kt` aggregates every module's
   Koin module via `initKoin()`; `App.kt` is the Compose root. It depends on
   every `:core:*` module (and, once one exists, every `:feature:*` module).
-- **`:core:common`** — pure Kotlin: `AppResult`/`DomainError` (the result type
-  every datasource/usecase returns instead of throwing), `CoroutineDispatchers`.
+- **`:core:common`** — pure Kotlin: `AppResult`/`DomainError`, `CoroutineDispatchers`,
+  `TodayProvider` (the single source of "today" — a Koin-swappable wrapper
+  over `kotlinx.datetime.Clock.System`, used anywhere a feature needs the
+  current date instead of reading the system clock directly).
 - **`:core:network`** — Ktor wrapper: `createHttpClient()` (OkHttp on Android,
   Darwin on iOS, via `expect fun httpClientEngine()`), and `HttpClient.safeRequest<T> { }`,
   which maps responses/exceptions to `AppResult<T>`.
 - **`:core:database`** — SQLDelight wrapper: `DatabaseDriverFactory` (`expect`/`actual`,
   no common constructor since Android needs a `Context` and iOS doesn't — each
-  platform's Koin module in `di/DatabaseModule.<platform>.kt` supplies the
-  actual instance) plus the generic `KeyValueCache<K, V>` contract (with an
-  `InMemoryKeyValueCache` usable as a test fake). Feature modules apply the
-  SQLDelight Gradle plugin themselves for their own `.sq` schema and build
-  their generated `Database` from a driver obtained here — this module does
-  not itself define any schema.
+  platform's Koin module supplies the actual instance) plus the generic
+  `KeyValueCache<K, V>` contract (with an `InMemoryKeyValueCache` usable as a
+  test fake, and a `SqlDelightKeyValueCache` real implementation backed by
+  this module's own small `keyValueEntry` SQLDelight schema — the one schema
+  this module owns itself; every other schema belongs to the feature module
+  that needs it). Feature modules apply the SQLDelight Gradle plugin
+  themselves for their own `.sq` schema and build their generated `Database`
+  from a driver obtained here.
 - **`:core:mvi`** — `MviState`/`MviEvent`/`MviEffect` marker interfaces,
   `BaseViewModel<S, E, F>` (handler-style: `onEvent` calls `setState { }` /
   `sendEffect()` directly, no separate reducer function), and the generic
@@ -64,10 +68,15 @@ Module layout, declared in `settings.gradle.kts`:
   features exist). **Not yet wired into `:shared`'s `App()`** — there's no
   screen to navigate to until the first feature module exists; wire
   `NavDisplay` up then.
-- **`:feature:*`** — none yet. Each one depends on whichever `:core:*` modules
-  it needs, owns its own MVI contract (`State`/`Event`/`Effect` extending the
-  `core:mvi` marker interfaces), its own datasources, and contributes a Koin
-  module + `NavEntryProviderContributor`.
+- **`:feature:tasks`** — TODO/task list: `Task`/`TaskType` domain model,
+  `GetTasksForDashboard` (8-day dashboard filter/sort), `MarkTaskComplete`,
+  `UpdateTasksDates` (daily cleanup job run from the dashboard ViewModel's
+  init), `AddTask`/`EditTask`/`DeleteTask`, its own `taskEntity` SQLDelight
+  schema, `DashboardScreen`/`TaskEditScreen`.
+- **`:feature:grocery`** — grocery list: `GroceryItem` domain model,
+  `GetGroceryItems`/`AddGrocery`/`EditGrocery`/`DeleteGrocery`, its own
+  `groceryItemEntity` SQLDelight schema, `GroceryListScreen` (inline-expand
+  add/edit rows).
 
 Dependency rule: `feature -> core`, never the reverse. `core:network`,
 `core:database`, and `core:mvi` depend on `core:common` only, never on each
