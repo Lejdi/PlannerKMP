@@ -52,6 +52,10 @@ fun DashboardScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Nav3 tears down and recomposes this screen when returning from TaskEdit, even though
+    // the retained ViewModel instance means init{} won't run again - so refresh on every mount.
+    LaunchedEffect(Unit) { viewModel.onEvent(DashboardEvent.ScreenResumed) }
+
     LaunchedEffectCollectEffects(viewModel) { effect ->
         when (effect) {
             is DashboardEffect.NavigateToAddTask -> onNavigateToAddTask()

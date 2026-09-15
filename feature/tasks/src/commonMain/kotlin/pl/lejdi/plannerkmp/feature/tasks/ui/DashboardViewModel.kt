@@ -17,12 +17,9 @@ class DashboardViewModel(
 
     override fun createInitialState() = DashboardState()
 
-    init {
-        loadDashboard()
-    }
-
     override fun onEvent(event: DashboardEvent) {
         when (event) {
+            is DashboardEvent.ScreenResumed -> loadDashboard()
             is DashboardEvent.RevealActions -> setState { copy(revealedTaskId = event.taskId) }
             is DashboardEvent.DismissActions -> setState { copy(revealedTaskId = null) }
             is DashboardEvent.CompleteTask -> completeTask(event.task)

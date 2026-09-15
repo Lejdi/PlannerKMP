@@ -48,8 +48,10 @@ class DashboardViewModelTest {
         )
 
     @Test
-    fun loadsEightDaysOnCreation() = runTest {
+    fun loadsEightDaysOnScreenResumed() = runTest {
         val viewModel = viewModel(FakeTasksDatasource())
+
+        viewModel.onEvent(DashboardEvent.ScreenResumed)
 
         assertFalse(viewModel.state.value.isLoading)
         assertEquals(8, viewModel.state.value.days.size)
@@ -60,15 +62,32 @@ class DashboardViewModelTest {
     fun runsCleanupBeforeLoadingSoStaleTasksAreAlreadyGone() = runTest {
         // A one-time task with a past startDate is deleted by the cleanup rule (daysInterval == 0,
         // not asap, startDate < today). Asserting against the datasource's own state (rather than the
-        // dashboard's returned days) is what actually proves cleanup ran as part of ViewModel creation:
-        // the dashboard's forward-looking 8-day window would never show this task either way.
+        // dashboard's returned days) is what actually proves cleanup ran as part of the reload: the
+        // dashboard's forward-looking 8-day window would never show this task either way.
         val staleTask = Task(1, "Stale", null, today.minus(5, DateTimeUnit.DAY), null, null, 0, false)
         val datasource = FakeTasksDatasource(initialTasks = listOf(staleTask))
+        val viewModel = viewModel(datasource)
 
-        viewModel(datasource)
+        viewModel.onEvent(DashboardEvent.ScreenResumed)
 
         assertTrue(datasource.tasks.isEmpty(), "cleanup should have deleted the stale task from the datasource")
         assertEquals(today, datasource.lastCleanupDate)
+    }
+
+    @Test
+    fun screenResumedReloadsTasksAddedOnAnotherScreenWhileThisViewModelWasRetained() = runTest {
+        // Regression test: Nav3 retains this ViewModel instance across the back stack, so a task
+        // added via TaskEditScreen (a different ViewModel) must show up here without recreating
+        // DashboardViewModel - only re-firing ScreenResumed, exactly like returning from that screen.
+        val datasource = FakeTasksDatasource()
+        val viewModel = viewModel(datasource)
+        viewModel.onEvent(DashboardEvent.ScreenResumed)
+        assertEquals(0, viewModel.state.value.days.sumOf { it.tasks.size })
+
+        datasource.tasks.add(Task(1, "Added elsewhere", null, today, null, null, 0, false))
+        viewModel.onEvent(DashboardEvent.ScreenResumed)
+
+        assertEquals(1, viewModel.state.value.days.sumOf { it.tasks.size })
     }
 
     @Test
@@ -106,8 +125,9 @@ class DashboardViewModelTest {
         // The first datasource call of the load is the cleanup's getLastCleanupDate().
         val datasource = FakeTasksDatasource()
         datasource.failNextCall = true
-
         val viewModel = viewModel(datasource)
+
+        viewModel.onEvent(DashboardEvent.ScreenResumed)
 
         assertEquals(DashboardEffect.ShowError("fake failure"), viewModel.effect.first())
         assertFalse(viewModel.state.value.isLoading)

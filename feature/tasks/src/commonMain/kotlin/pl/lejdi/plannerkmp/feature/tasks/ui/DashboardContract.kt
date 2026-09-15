@@ -13,6 +13,10 @@ data class DashboardState(
 ) : MviState
 
 sealed interface DashboardEvent : MviEvent {
+    // Nav3's rememberViewModelStoreNavEntryDecorator() retains this ViewModel across the
+    // back stack, so init{} only ever runs once - the screen fires this itself on every
+    // (re)composition so edits made on TaskEditScreen show up when navigating back.
+    data object ScreenResumed : DashboardEvent
     data class RevealActions(val taskId: Long) : DashboardEvent
     data object DismissActions : DashboardEvent
     data class CompleteTask(val task: Task) : DashboardEvent
