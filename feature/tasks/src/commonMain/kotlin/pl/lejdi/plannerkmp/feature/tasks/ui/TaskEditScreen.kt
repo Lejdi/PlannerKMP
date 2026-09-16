@@ -1,29 +1,53 @@
 package pl.lejdi.plannerkmp.feature.tasks.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import pl.lejdi.plannerkmp.core.ui.components.ErrorView
@@ -39,6 +63,8 @@ fun TaskEditScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
 
     LaunchedEffectCollectEffects(viewModel) { effect ->
@@ -60,76 +86,135 @@ fun TaskEditScreen(
             return@Scaffold
         }
 
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            OutlinedTextField(
-                value = state.name,
-                onValueChange = { viewModel.onEvent(TaskEditEvent.NameChanged(it)) },
-                label = { Text("Name") },
-                isError = state.nameError,
-            )
-            OutlinedTextField(
-                value = state.description,
-                onValueChange = { viewModel.onEvent(TaskEditEvent.DescriptionChanged(it)) },
-                label = { Text("Description") },
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(color = MaterialTheme.colorScheme.secondaryContainer)
+                .padding(top = padding.calculateTopPadding())
+                .padding(16.dp),
+        ) {
+            Column(modifier = Modifier.weight(1.0f)) {
+                OutlinedTextField(
+                    value = state.name,
+                    onValueChange = { viewModel.onEvent(TaskEditEvent.NameChanged(it)) },
+                    label = { Text("Task name") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    isError = state.nameError,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = state.description,
+                    onValueChange = { viewModel.onEvent(TaskEditEvent.DescriptionChanged(it)) },
+                    label = { Text("Task description") },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
-            Row {
-                TaskType.entries.forEach { type ->
-                    Row {
-                        RadioButton(
-                            selected = state.type == type,
-                            onClick = { viewModel.onEvent(TaskEditEvent.TypeChanged(type)) },
-                        )
-                        Text(type.name)
+                Column(modifier = Modifier.padding(top = 8.dp)) {
+                    TaskType.entries.forEach { type ->
+                        val isSelected = state.type == type
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = isSelected,
+                                    onClick = { viewModel.onEvent(TaskEditEvent.TypeChanged(type)) },
+                                ),
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { viewModel.onEvent(TaskEditEvent.TypeChanged(type)) },
+                            )
+                            Text(text = type.displayLabel(), modifier = Modifier.padding(start = 8.dp))
+                        }
+                        if (isSelected && type == TaskType.Periodic) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(start = 40.dp, bottom = 4.dp),
+                            ) {
+                                Text("Repeat every")
+                                Spacer(modifier = Modifier.width(4.dp))
+                                OutlinedTextField(
+                                    value = state.daysInterval,
+                                    onValueChange = { viewModel.onEvent(TaskEditEvent.DaysIntervalChanged(it)) },
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    modifier = Modifier.width(64.dp),
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("days")
+                            }
+                        }
                     }
                 }
-            }
 
-            if (state.type != TaskType.Asap) {
-                OutlinedTextField(
-                    value = state.startDate?.toString().orEmpty(),
-                    onValueChange = {},
-                    label = { Text("Start date (dd-MM-yyyy)") },
-                    readOnly = true,
-                )
-            }
-            if (state.type == TaskType.Periodic) {
-                OutlinedTextField(
-                    value = state.endDate?.toString().orEmpty(),
-                    onValueChange = {},
-                    label = { Text("End date (dd-MM-yyyy)") },
-                    readOnly = true,
-                )
-                OutlinedTextField(
-                    value = state.daysInterval,
-                    onValueChange = { viewModel.onEvent(TaskEditEvent.DaysIntervalChanged(it)) },
-                    label = { Text("Repeat every (days)") },
-                )
-            }
-            if (state.type != TaskType.Asap) {
-                Box {
-                    OutlinedTextField(
-                        value = state.hour?.toString().orEmpty(),
-                        onValueChange = {},
-                        label = { Text("Time (optional)") },
-                        readOnly = true,
-                    )
-                    // OutlinedTextField consumes clicks itself even when readOnly, so an
-                    // overlay is needed to turn the field into a tap target for the dialog.
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clickable { showTimePicker = true },
+                if (state.type != TaskType.Asap) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        TapToOpenField(
+                            value = state.startDate?.toEditFieldDisplayString().orEmpty(),
+                            label = if (state.type == TaskType.OneTime) "Date" else "Start date",
+                            width = 150.dp,
+                            onClick = { showStartDatePicker = true },
+                        )
+                        TapToOpenField(
+                            value = state.hour?.toEditFieldDisplayString().orEmpty(),
+                            label = "Hour",
+                            width = 100.dp,
+                            onClick = { showTimePicker = true },
+                        )
+                    }
+                }
+                if (state.type == TaskType.Periodic) {
+                    TapToOpenField(
+                        value = state.endDate?.toEditFieldDisplayString().orEmpty(),
+                        label = "End date",
+                        width = 150.dp,
+                        modifier = Modifier.padding(top = 8.dp),
+                        onClick = { showEndDatePicker = true },
                     )
                 }
             }
 
-            Row {
-                Button(onClick = { viewModel.onEvent(TaskEditEvent.SaveClicked) }) { Text("Save") }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
                 Button(onClick = { viewModel.onEvent(TaskEditEvent.DeleteClicked) }) { Text("Delete") }
+                Button(onClick = { viewModel.onEvent(TaskEditEvent.SaveClicked) }) { Text("Save") }
             }
         }
 
+        if (showStartDatePicker) {
+            DateDialog(
+                initialDate = state.startDate,
+                onDismiss = { showStartDatePicker = false },
+                onConfirm = {
+                    viewModel.onEvent(TaskEditEvent.StartDateChanged(it))
+                    showStartDatePicker = false
+                },
+            )
+        }
+        if (showEndDatePicker) {
+            DateDialog(
+                initialDate = state.endDate,
+                selectableDates = state.startDate?.let { startDate ->
+                    object : SelectableDates {
+                        override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                            utcTimeMillis >= startDate.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
+                    }
+                } ?: DatePickerDefaults.AllDates,
+                onDismiss = { showEndDatePicker = false },
+                onConfirm = {
+                    viewModel.onEvent(TaskEditEvent.EndDateChanged(it))
+                    showEndDatePicker = false
+                },
+            )
+        }
         if (showTimePicker) {
             val timePickerState = rememberTimePickerState(
                 initialHour = state.hour?.hour ?: 12,
@@ -153,3 +238,67 @@ fun TaskEditScreen(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateDialog(
+    initialDate: LocalDate?,
+    onDismiss: () -> Unit,
+    onConfirm: (LocalDate) -> Unit,
+    selectableDates: SelectableDates = DatePickerDefaults.AllDates,
+) {
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = initialDate?.atStartOfDayIn(TimeZone.UTC)?.toEpochMilliseconds(),
+        selectableDates = selectableDates,
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            Button(onClick = {
+                datePickerState.selectedDateMillis?.let { millis ->
+                    onConfirm(Instant.fromEpochMilliseconds(millis).toLocalDateTime(TimeZone.UTC).date)
+                }
+                onDismiss()
+            }) { Text("OK") }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) { Text("Cancel") }
+        },
+    ) {
+        DatePicker(state = datePickerState)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TapToOpenField(
+    value: String,
+    label: String,
+    width: Dp,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            enabled = false,
+            label = { Text(label) },
+            colors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                disabledContainerColor = Color.Transparent,
+                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+            modifier = Modifier.width(width),
+        )
+        Box(modifier = Modifier.matchParentSize().clickable(onClick = onClick))
+    }
+}
+
+private fun TaskType.displayLabel(): String = when (this) {
+    TaskType.Asap -> "ASAP"
+    TaskType.OneTime -> "Specific day"
+    TaskType.Periodic -> "Periodic"
+}
+

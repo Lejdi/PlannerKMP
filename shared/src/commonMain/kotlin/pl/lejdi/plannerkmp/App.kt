@@ -2,6 +2,10 @@ package pl.lejdi.plannerkmp
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -50,13 +54,13 @@ fun App() {
                     NavigationBarItem(
                         selected = selectedTab == BottomNavTab.Tasks,
                         onClick = { selectedTab = BottomNavTab.Tasks },
-                        icon = {},
+                        icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
                         label = { Text("Tasks") },
                     )
                     NavigationBarItem(
                         selected = selectedTab == BottomNavTab.Grocery,
                         onClick = { selectedTab = BottomNavTab.Grocery },
-                        icon = {},
+                        icon = { Icon(Icons.Filled.ShoppingCart, contentDescription = null) },
                         label = { Text("Grocery") },
                     )
                 }
