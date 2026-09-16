@@ -252,13 +252,13 @@ private fun PlainTextField(
             singleLine = singleLine,
             enabled = true,
             interactionSource = interactionSource,
-            contentPadding = PaddingValues(1.dp),
+            contentPadding = PaddingValues(bottom = 4.dp),
             placeholder = { Text(text = placeholder, style = textStyle) },
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.4f),
             ),
         )
     }

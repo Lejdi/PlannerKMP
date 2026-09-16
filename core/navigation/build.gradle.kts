@@ -29,6 +29,9 @@ kotlin {
             // compile classpath transitively, not just at core:navigation's own compile time.
             api(libs.navigation3.ui)
             api(libs.compose.runtime)
+            // api: LocalSharedTransitionScope's type (SharedTransitionScope) is part of this
+            // module's own public API, so consumers need it on their compile classpath too.
+            api(libs.compose.animation)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

@@ -1,6 +1,8 @@
 package pl.lejdi.plannerkmp.feature.tasks.ui
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -40,11 +42,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import org.koin.compose.viewmodel.koinViewModel
 import pl.lejdi.plannerkmp.core.mvi.BaseViewModel
 import pl.lejdi.plannerkmp.core.mvi.MviEffect
 import pl.lejdi.plannerkmp.core.mvi.MviEvent
 import pl.lejdi.plannerkmp.core.mvi.MviState
+import pl.lejdi.plannerkmp.core.navigation.LocalSharedTransitionScope
 import pl.lejdi.plannerkmp.core.ui.components.ErrorView
 import pl.lejdi.plannerkmp.core.ui.components.LoadingView
 import pl.lejdi.plannerkmp.feature.tasks.domain.DashboardDay
@@ -60,6 +64,7 @@ internal fun <S : MviState, E : MviEvent, F : MviEffect> LaunchedEffectCollectEf
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun DashboardScreen(
     onNavigateToAddTask: () -> Unit,
@@ -68,6 +73,8 @@ fun DashboardScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
 
     // Nav3 tears down and recomposes this screen when returning from TaskEdit, even though
     // the retained ViewModel instance means init{} won't run again - so refresh on every mount.
@@ -83,8 +90,17 @@ fun DashboardScreen(
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.onEvent(DashboardEvent.AddTaskClicked) }) {
-                Icon(Icons.Filled.Add, contentDescription = null)
+            with(sharedTransitionScope) {
+                FloatingActionButton(
+                    onClick = { viewModel.onEvent(DashboardEvent.AddTaskClicked) },
+                    modifier = Modifier.sharedBounds(
+                        sharedContentState = rememberSharedContentState(AddTaskSharedKey),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        boundsTransform = { _, _ -> tween(500) },
+                    ),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                }
             }
         },
     ) { padding ->

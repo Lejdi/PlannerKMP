@@ -1,5 +1,7 @@
 package pl.lejdi.plannerkmp.feature.tasks.ui
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +44,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -50,11 +53,12 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import pl.lejdi.plannerkmp.core.navigation.LocalSharedTransitionScope
 import pl.lejdi.plannerkmp.core.ui.components.ErrorView
 import pl.lejdi.plannerkmp.feature.tasks.domain.Task
 import pl.lejdi.plannerkmp.feature.tasks.domain.TaskType
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun TaskEditScreen(
     task: Task?,
@@ -66,6 +70,8 @@ fun TaskEditScreen(
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
 
     LaunchedEffectCollectEffects(viewModel) { effect ->
         when (effect) {
@@ -74,7 +80,21 @@ fun TaskEditScreen(
         }
     }
 
-    Scaffold { padding ->
+    // Only a newly-added task morphs in from the Dashboard's FAB - editing an existing task
+    // is opened from its TaskCard, so it gets Nav3's plain scene transition instead.
+    val screenModifier = if (task == null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedBounds(
+                sharedContentState = rememberSharedContentState(AddTaskSharedKey),
+                animatedVisibilityScope = animatedVisibilityScope,
+                boundsTransform = { _, _ -> tween(500) },
+            )
+        }
+    } else {
+        Modifier
+    }
+
+    Scaffold(modifier = screenModifier) { padding ->
         errorMessage?.let { message ->
             // The form's own values live in the ViewModel's state, so dismissing
             // brings the user back to exactly what they were editing.

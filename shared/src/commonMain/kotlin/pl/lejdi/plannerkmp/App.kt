@@ -1,5 +1,7 @@
 package pl.lejdi.plannerkmp
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -24,6 +26,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import org.koin.compose.getKoin
 import pl.lejdi.plannerkmp.core.navigation.LocalNavigator
+import pl.lejdi.plannerkmp.core.navigation.LocalSharedTransitionScope
 import pl.lejdi.plannerkmp.core.navigation.NavEntryProviderContributor
 import pl.lejdi.plannerkmp.core.navigation.Navigator
 import pl.lejdi.plannerkmp.core.ui.theme.PlannerTheme
@@ -32,6 +35,7 @@ import pl.lejdi.plannerkmp.feature.tasks.TasksNavKey
 
 private enum class BottomNavTab { Tasks, Grocery }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun App() {
     PlannerTheme {
@@ -69,15 +73,20 @@ fun App() {
             Box(modifier = Modifier.padding(padding)) {
                 when (selectedTab) {
                     BottomNavTab.Tasks -> CompositionLocalProvider(LocalNavigator provides tasksNavigator) {
-                        NavDisplay(
-                            backStack = tasksNavigator.backStack,
-                            onBack = { tasksNavigator.goBack() },
-                            entryDecorators = listOf(
-                                rememberSaveableStateHolderNavEntryDecorator(),
-                                rememberViewModelStoreNavEntryDecorator(),
-                            ),
-                            entryProvider = entryProvider,
-                        )
+                        SharedTransitionLayout {
+                            CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+                                NavDisplay(
+                                    backStack = tasksNavigator.backStack,
+                                    onBack = { tasksNavigator.goBack() },
+                                    entryDecorators = listOf(
+                                        rememberSaveableStateHolderNavEntryDecorator(),
+                                        rememberViewModelStoreNavEntryDecorator(),
+                                    ),
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    entryProvider = entryProvider,
+                                )
+                            }
+                        }
                     }
                     BottomNavTab.Grocery -> CompositionLocalProvider(LocalNavigator provides groceryNavigator) {
                         NavDisplay(
