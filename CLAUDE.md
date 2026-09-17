@@ -206,7 +206,12 @@ Modules, declared in `settings.gradle.kts`:
   `updateDetails` writes the text columns and `updateCompletedOn` writes that one column, so a
   rename cannot un-tick a routine and a tick cannot revert a rename. Deleting is behind a
   confirmation dialog rather than grocery's undo-snackbar — it is rare and deliberate here, not a
-  tap made forty times a trip.
+  tap made forty times a trip. **A ticked routine leaves the list** for a collapsed "Done today (N)"
+  footer, so what is on screen is what is left to do; `RoutinesState` derives `pendingRoutines` /
+  `doneRoutines` from `isDoneToday`, which is presentation grouping over the domain's own answer.
+  The footer is collapsed, not dropped, because the checkbox is the only way to *un*-tick and a row
+  that vanished on a mis-tap could not be recovered until midnight. `allDone` is separate from
+  `isEmpty` — both leave the list bare and they mean opposite things, so they get different wording.
 
 ### Rules
 

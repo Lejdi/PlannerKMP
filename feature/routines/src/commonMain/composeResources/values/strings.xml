@@ -6,6 +6,11 @@
     <string name="routines_delete_routine">Delete routine</string>
     <string name="routines_mark_done">Done today</string>
     <string name="routines_empty_list">No daily routines yet</string>
+    <string name="routines_all_done">All done for today</string>
+
+    <string name="routines_done_section">Done today (%1$d)</string>
+    <string name="routines_done_section_expand">Show completed routines</string>
+    <string name="routines_done_section_collapse">Hide completed routines</string>
 
     <string name="routines_field_name">Routine</string>
     <string name="routines_field_description">Note</string>

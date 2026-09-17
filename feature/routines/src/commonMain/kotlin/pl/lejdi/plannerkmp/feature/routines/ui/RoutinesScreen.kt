@@ -3,6 +3,7 @@ package pl.lejdi.plannerkmp.feature.routines.ui
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,12 +15,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -59,9 +63,13 @@ import pl.lejdi.plannerkmp.feature.routines.domain.TodayRoutine
 import pl.lejdi.plannerkmp.feature.routines.resources.Res
 import pl.lejdi.plannerkmp.feature.routines.resources.routines_action_confirm
 import pl.lejdi.plannerkmp.feature.routines.resources.routines_add_routine
+import pl.lejdi.plannerkmp.feature.routines.resources.routines_all_done
 import pl.lejdi.plannerkmp.feature.routines.resources.routines_delete_message
 import pl.lejdi.plannerkmp.feature.routines.resources.routines_delete_routine
 import pl.lejdi.plannerkmp.feature.routines.resources.routines_delete_title
+import pl.lejdi.plannerkmp.feature.routines.resources.routines_done_section
+import pl.lejdi.plannerkmp.feature.routines.resources.routines_done_section_collapse
+import pl.lejdi.plannerkmp.feature.routines.resources.routines_done_section_expand
 import pl.lejdi.plannerkmp.feature.routines.resources.routines_edit_routine
 import pl.lejdi.plannerkmp.feature.routines.resources.routines_empty_list
 import pl.lejdi.plannerkmp.feature.routines.resources.routines_error_delete_failed
@@ -128,33 +136,14 @@ internal fun RoutinesContent(
             ) {
                 item(key = "top-spacer") { Spacer(modifier = Modifier.height(Spacing.lg)) }
 
-                if (state.routines.isEmpty() && state.editor?.target != EditorTarget.New) {
-                    item(key = "empty-state") {
-                        Text(
-                            text = stringResource(Res.string.routines_empty_list),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = Spacing.xl, horizontal = Spacing.lg),
-                        )
-                    }
-                }
+                // Only what is still to do. Ticked routines drop into the footer below, so the
+                // list the user is working through shortens as they go instead of standing still.
+                routineRows(state.pendingRoutines, state, onEvent)
 
-                items(state.routines, key = { it.id }) { routine ->
-                    val editor = state.editor
-                    if (editor != null && editor.target == EditorTarget.Existing(routine.id)) {
-                        InlineEditCard(
-                            editor = editor,
-                            canSubmit = !state.isEditorBusy,
-                            onEvent = onEvent,
-                        )
-                    } else {
-                        RoutineRow(
-                            routine = routine,
-                            // This row only, so ticking one leaves the rest tappable.
-                            canToggle = !state.isToggling(routine.id),
-                            onEvent = onEvent,
-                        )
-                    }
+                // Both are suppressed while the "new routine" editor is open, because the list is
+                // about to gain a row and neither message would be true for long.
+                if (state.editor?.target != EditorTarget.New) {
+                    listMessage(state)
                 }
 
                 // Keyed: without one the trailing item's identity is its index, so it is disposed
@@ -167,6 +156,19 @@ internal fun RoutinesContent(
                         onEvent = onEvent,
                     )
                 }
+
+                if (state.doneRoutines.isNotEmpty()) {
+                    item(key = "done-header") {
+                        DoneSectionHeader(
+                            count = state.doneRoutines.size,
+                            expanded = state.doneSectionExpanded,
+                            onEvent = onEvent,
+                        )
+                    }
+                    if (state.doneSectionExpanded) {
+                        routineRows(state.doneRoutines, state, onEvent)
+                    }
+                }
             }
         }
     }
@@ -177,6 +179,97 @@ internal fun RoutinesContent(
         DeleteConfirmationDialog(
             canConfirm = !state.isEditorBusy,
             onEvent = onEvent,
+        )
+    }
+}
+
+/**
+ * A list of routines, each either drawn as a row or replaced by the editor that has it open.
+ *
+ * One helper rather than the same branch written twice: the pending list and the done footer both
+ * need it, and a routine stays editable from inside the footer. Two copies of "swap this row for
+ * the editor" is exactly the kind of pair that drifts.
+ */
+private fun LazyListScope.routineRows(
+    routines: List<TodayRoutine>,
+    state: RoutinesState,
+    onEvent: (RoutinesEvent) -> Unit,
+) {
+    items(routines, key = { it.id }) { routine ->
+        val editor = state.editor
+        if (editor != null && editor.target == EditorTarget.Existing(routine.id)) {
+            InlineEditCard(
+                editor = editor,
+                canSubmit = !state.isEditorBusy,
+                onEvent = onEvent,
+            )
+        } else {
+            RoutineRow(
+                routine = routine,
+                // This row only, so ticking one leaves the rest tappable.
+                canToggle = !state.isToggling(routine.id),
+                onEvent = onEvent,
+            )
+        }
+    }
+}
+
+/**
+ * The one line that explains an empty middle of the screen, or nothing.
+ *
+ * "Nothing stored" and "nothing left to do" look identical — a screen with no rows on it — and
+ * mean opposite things, so they get different words. Reusing the empty-state string for a finished
+ * list would tell somebody who had just completed five routines that they had none.
+ */
+private fun LazyListScope.listMessage(state: RoutinesState) {
+    val message = when {
+        state.isEmpty -> Res.string.routines_empty_list
+        state.allDone -> Res.string.routines_all_done
+        else -> return
+    }
+    item(key = "list-message") {
+        Text(
+            text = stringResource(message),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = Spacing.xl, horizontal = Spacing.lg),
+        )
+    }
+}
+
+/**
+ * The footer that holds today's ticked routines out of the way.
+ *
+ * The whole row is the control, with the chevron as its only visual cue, so the target is the full
+ * width rather than a 24dp arrow. `onClickLabel` says what the tap will *do* and therefore flips
+ * with the state — announcing "Show" while the section is already open is worse than silence.
+ */
+@Composable
+private fun DoneSectionHeader(count: Int, expanded: Boolean, onEvent: (RoutinesEvent) -> Unit) {
+    val label = stringResource(
+        if (expanded) Res.string.routines_done_section_collapse else Res.string.routines_done_section_expand,
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(Sizing.CARD_WIDTH_FRACTION)
+            .clickable(onClickLabel = label, role = Role.Button) {
+                onEvent(RoutinesEvent.DoneSectionToggled)
+            }
+            .padding(vertical = Spacing.sm, horizontal = Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            // The row's own click label already says what this does; describing it again made
+            // assistive technology announce the action twice.
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(Res.string.routines_done_section, count),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = Spacing.xs),
         )
     }
 }

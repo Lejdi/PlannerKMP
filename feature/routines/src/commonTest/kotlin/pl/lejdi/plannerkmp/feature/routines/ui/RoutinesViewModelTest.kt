@@ -130,6 +130,67 @@ class RoutinesViewModelTest {
 
         assertFalse(viewModel.state.value.routines.single().isDoneToday)
         assertNull(datasource.routines.single().completedOn)
+        // Back out of the done section and into the list proper.
+        assertEquals(listOf(1L), viewModel.state.value.pendingRoutines.map { it.id })
+        assertTrue(viewModel.state.value.doneRoutines.isEmpty())
+    }
+
+    /** Ticking is what takes a routine out of the list the user is working through. */
+    @Test
+    fun tickingARoutineMovesItFromPendingToDone() = runTest {
+        val datasource = FakeRoutinesDatasource(listOf(stretch, read))
+        val viewModel = viewModel(datasource)
+        runCurrent()
+        assertEquals(listOf(1L, 2L), viewModel.state.value.pendingRoutines.map { it.id })
+        assertTrue(viewModel.state.value.doneRoutines.isEmpty())
+
+        viewModel.onEvent(RoutinesEvent.ToggleDone(id = 1, done = true))
+        runCurrent()
+
+        assertEquals(listOf(2L), viewModel.state.value.pendingRoutines.map { it.id })
+        assertEquals(listOf(1L), viewModel.state.value.doneRoutines.map { it.id })
+    }
+
+    /** A routine ticked on an earlier day is pending again, not filed under done. */
+    @Test
+    fun aRoutineTickedYesterdayCountsAsPending() = runTest {
+        val yesterday = LocalDate(2026, 9, 16)
+        val datasource = FakeRoutinesDatasource(listOf(stretch.copy(completedOn = yesterday)))
+        val viewModel = viewModel(datasource)
+        runCurrent()
+
+        assertEquals(listOf(1L), viewModel.state.value.pendingRoutines.map { it.id })
+        assertTrue(viewModel.state.value.doneRoutines.isEmpty())
+    }
+
+    @Test
+    fun theDoneSectionStartsCollapsedAndToggles() = runTest {
+        val viewModel = viewModel(FakeRoutinesDatasource(listOf(stretch.copy(completedOn = today))))
+        runCurrent()
+
+        assertFalse(viewModel.state.value.doneSectionExpanded, "it starts out of the way")
+
+        viewModel.onEvent(RoutinesEvent.DoneSectionToggled)
+        assertTrue(viewModel.state.value.doneSectionExpanded)
+
+        viewModel.onEvent(RoutinesEvent.DoneSectionToggled)
+        assertFalse(viewModel.state.value.doneSectionExpanded)
+    }
+
+    /** Unlike the delete dialog, an expanded section is a harmless choice worth restoring. */
+    @Test
+    fun theDoneSectionExpansionSurvivesProcessDeath() = runTest {
+        val savedStateHandle = SavedStateHandle()
+        val datasource = FakeRoutinesDatasource(listOf(stretch.copy(completedOn = today)))
+        val first = viewModel(datasource, savedStateHandle)
+        runCurrent()
+        first.onEvent(RoutinesEvent.DoneSectionToggled)
+        runCurrent()
+
+        val restored = viewModel(datasource, savedStateHandle)
+        runCurrent()
+
+        assertTrue(restored.state.value.doneSectionExpanded)
     }
 
     /** Per row: a second tap on the *same* row is the double-tap this guards against. */

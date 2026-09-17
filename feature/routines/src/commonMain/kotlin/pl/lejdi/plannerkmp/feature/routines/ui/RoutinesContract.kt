@@ -25,8 +25,43 @@ data class RoutinesState(
     val editor: RoutineEditor? = null,
     /** The routine the confirmation dialog is about, or null when no dialog is up. */
     val pendingDeletionId: Long? = null,
+    /** Whether the "Done today" footer is open. Closed is the resting state — see [doneRoutines]. */
+    val doneSectionExpanded: Boolean = false,
     override val message: UiMessage<RoutineMessage>? = null,
 ) : LoadableState<RoutineMessage> {
+
+    /**
+     * What is still to do today — the list proper.
+     *
+     * Derived here rather than in the domain: `isDoneToday` is the domain's answer, and splitting
+     * one list into two is this screen deciding how to lay that answer out. It sits beside
+     * [isEmpty] and [isSubmitting] for the same reason they do.
+     */
+    val pendingRoutines: List<TodayRoutine> get() = routines.filterNot { it.isDoneToday }
+
+    /**
+     * What has been ticked off today, kept out of the way in a collapsed footer.
+     *
+     * Not dropped from the screen altogether: the checkbox is the only way to *un*-tick, so a
+     * routine that vanished on a mis-tap could not be recovered until midnight.
+     */
+    val doneRoutines: List<TodayRoutine> get() = routines.filter { it.isDoneToday }
+
+    /**
+     * True when there are routines and every one of them is ticked.
+     *
+     * Distinct from [isEmpty], which means there are none at all. Showing "No daily routines yet"
+     * to somebody who has just finished five of them would be a plain falsehood.
+     */
+    val allDone: Boolean get() = routines.isNotEmpty() && pendingRoutines.isEmpty()
+
+    /**
+     * Nothing stored at all.
+     *
+     * Deliberately not "nothing left to do": this feeds `hasTerminalLoadFailure`, which asks
+     * whether there is anything on screen to fall back on — and a finished list is a screen with
+     * the done footer and its own message on it.
+     */
     override val isEmpty: Boolean get() = routines.isEmpty()
 
     override val isSubmitting: Boolean get() = isEditorBusy || togglingRoutineIds.isNotEmpty()
@@ -59,13 +94,21 @@ sealed interface EditorTarget {
 /**
  * The restorable slice of [RoutinesState].
  *
- * The open editor is the only thing on this screen the user typed; the list is in the database and
- * re-emits by itself. [RoutinesState.pendingDeletionId] is deliberately absent: a destructive
- * confirmation that comes back after process death, under a thumb already moving towards where the
- * confirm button was, is worse than one that is simply gone.
+ * The editor is what the user typed and the expanded footer is what they chose; the list itself is
+ * in the database and re-emits by itself, so it is never saved.
+ *
+ * [RoutinesState.pendingDeletionId] is deliberately absent, and the contrast with
+ * [doneSectionExpanded] is the point: restoring an expanded section costs a user nothing if it is
+ * wrong, while a destructive confirmation that comes back after process death — under a thumb
+ * already moving towards where the confirm button was — is worse than one that is simply gone.
+ *
+ * [doneSectionExpanded] has a default, so saved state written before it existed still decodes.
  */
 @Serializable
-data class RoutinesInput(val editor: RoutineEditor? = null)
+data class RoutinesInput(
+    val editor: RoutineEditor? = null,
+    val doneSectionExpanded: Boolean = false,
+)
 
 enum class RoutineMessage {
     LoadFailed,
@@ -90,6 +133,9 @@ sealed interface RoutinesEvent : MviEvent {
     data class DeleteRequested(val id: Long) : RoutinesEvent
     data object DeleteConfirmed : RoutinesEvent
     data object DeleteCancelled : RoutinesEvent
+
+    /** Opens or closes the "Done today" footer. */
+    data object DoneSectionToggled : RoutinesEvent
     data object RetryClicked : RoutinesEvent
     data object MessageShown : RoutinesEvent
 }

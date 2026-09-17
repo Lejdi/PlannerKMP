@@ -40,10 +40,11 @@ class RoutinesViewModel(
 
     override fun createInitialState() = RoutinesState()
 
-    override fun captureInput(state: RoutinesState) = RoutinesInput(state.editor)
+    override fun captureInput(state: RoutinesState) =
+        RoutinesInput(editor = state.editor, doneSectionExpanded = state.doneSectionExpanded)
 
     override fun applyInput(state: RoutinesState, input: RoutinesInput) =
-        state.copy(editor = input.editor)
+        state.copy(editor = input.editor, doneSectionExpanded = input.doneSectionExpanded)
 
     init {
         observeRoutines()
@@ -64,6 +65,9 @@ class RoutinesViewModel(
             is RoutinesEvent.DeleteRequested -> setState { copy(pendingDeletionId = event.id) }
             is RoutinesEvent.DeleteConfirmed -> confirmDeletion()
             is RoutinesEvent.DeleteCancelled -> setState { copy(pendingDeletionId = null) }
+            is RoutinesEvent.DoneSectionToggled -> setState {
+                copy(doneSectionExpanded = !doneSectionExpanded)
+            }
             is RoutinesEvent.RetryClicked -> observeRoutines()
             is RoutinesEvent.MessageShown -> setState { copy(message = null) }
         }

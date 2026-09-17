@@ -27,11 +27,50 @@ private val PREVIEW_ROUTINES = listOf(
     previewRoutine(3L, "Water the plants", "Only the ones by the window", doneToday = false),
 )
 
-@Preview(name = "Routines — today, part done")
+/** Built through the same factory rather than copied, so `completedOn` agrees with the flag. */
+private val ALL_DONE_ROUTINES = listOf(
+    previewRoutine(1L, "Stretch", "Ten minutes, before coffee", doneToday = true),
+    previewRoutine(2L, "Read", null, doneToday = true),
+    previewRoutine(3L, "Water the plants", "Only the ones by the window", doneToday = true),
+)
+
+/** The resting state: one routine ticked, so it is in the footer rather than in the list. */
+@Preview(name = "Routines — today, done section collapsed")
 @Composable
 private fun RoutinesListPreview() = PlannerTheme {
     RoutinesContent(
         state = RoutinesState(isLoading = false, routines = PREVIEW_ROUTINES),
+        snackbarHostState = SnackbarHostState(),
+        onEvent = {},
+    )
+}
+
+/** The footer opened, which is the only way back to un-ticking something. */
+@Preview(name = "Routines — done section expanded")
+@Composable
+private fun RoutinesDoneExpandedPreview() = PlannerTheme {
+    RoutinesContent(
+        state = RoutinesState(
+            isLoading = false,
+            routines = PREVIEW_ROUTINES,
+            doneSectionExpanded = true,
+        ),
+        snackbarHostState = SnackbarHostState(),
+        onEvent = {},
+    )
+}
+
+/**
+ * Everything ticked.
+ *
+ * Worth a preview of its own because it is the state most easily confused with the empty one — no
+ * rows in the list either way, opposite meanings.
+ */
+@Preview(name = "Routines — all done")
+@Composable
+private fun RoutinesAllDonePreview() = PlannerTheme {
+    RoutinesContent(
+        state = RoutinesState(isLoading = false, routines = ALL_DONE_ROUTINES),
         snackbarHostState = SnackbarHostState(),
         onEvent = {},
     )
