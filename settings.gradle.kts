@@ -36,6 +36,8 @@ include(":core:database")
 include(":core:mvi")
 include(":core:ui")
 include(":core:navigation")
+// Test fixtures only: no production code depends on it, so nothing it contains ships.
+include(":core:testing")
 
 include(":feature:grocery")
 include(":feature:tasks")

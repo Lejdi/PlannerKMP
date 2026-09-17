@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="database" path="tasks.db" />
+    <include domain="database" path="grocery.db" />
+    <include domain="database" path="keyvalue.db" />
+</full-backup-content>

@@ -2,7 +2,6 @@ package pl.lejdi.plannerkmp.feature.tasks.ui
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,167 +18,266 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import kotlinx.coroutines.flow.drop
+import kotlinx.datetime.LocalDate
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
-import pl.lejdi.plannerkmp.core.mvi.BaseViewModel
-import pl.lejdi.plannerkmp.core.mvi.MviEffect
-import pl.lejdi.plannerkmp.core.mvi.MviEvent
-import pl.lejdi.plannerkmp.core.mvi.MviState
 import pl.lejdi.plannerkmp.core.navigation.LocalSharedTransitionScope
-import pl.lejdi.plannerkmp.core.ui.components.ErrorView
-import pl.lejdi.plannerkmp.core.ui.components.LoadingView
+import pl.lejdi.plannerkmp.core.navigation.NavAnimation
+import pl.lejdi.plannerkmp.core.ui.CollectEffects
+import pl.lejdi.plannerkmp.core.ui.components.LoadableContent
+import pl.lejdi.plannerkmp.core.ui.components.MessageHost
+import pl.lejdi.plannerkmp.core.ui.format.toFieldString
+import pl.lejdi.plannerkmp.core.ui.resources.core_action_retry
+import pl.lejdi.plannerkmp.core.ui.theme.Sizing
+import pl.lejdi.plannerkmp.core.ui.theme.Spacing
+import pl.lejdi.plannerkmp.core.ui.theme.dayHeading
+import pl.lejdi.plannerkmp.core.ui.theme.itemTitle
 import pl.lejdi.plannerkmp.feature.tasks.domain.DashboardDay
 import pl.lejdi.plannerkmp.feature.tasks.domain.Task
-
-@Composable
-internal fun <S : MviState, E : MviEvent, F : MviEffect> LaunchedEffectCollectEffects(
-    viewModel: BaseViewModel<S, E, F>,
-    onEffect: suspend (F) -> Unit,
-) {
-    LaunchedEffect(viewModel) {
-        viewModel.effect.collect { onEffect(it) }
-    }
-}
+import pl.lejdi.plannerkmp.feature.tasks.resources.Res
+import pl.lejdi.plannerkmp.feature.tasks.resources.tasks_add_task
+import pl.lejdi.plannerkmp.feature.tasks.resources.tasks_complete_task
+import pl.lejdi.plannerkmp.feature.tasks.resources.tasks_edit_task
+import pl.lejdi.plannerkmp.feature.tasks.resources.tasks_empty_day
+import pl.lejdi.plannerkmp.feature.tasks.resources.tasks_error_complete_failed
+import pl.lejdi.plannerkmp.feature.tasks.resources.tasks_error_load_failed
+import pl.lejdi.plannerkmp.core.ui.resources.Res as CoreRes
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun DashboardScreen(
     onNavigateToAddTask: () -> Unit,
-    onNavigateToEditTask: (Task) -> Unit,
+    onNavigateToEditTask: (Long) -> Unit,
     viewModel: DashboardViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedContentScope.current
 
-    // Nav3 tears down and recomposes this screen when returning from TaskEdit, even though
-    // the retained ViewModel instance means init{} won't run again - so refresh on every mount.
-    LaunchedEffect(Unit) { viewModel.onEvent(DashboardEvent.ScreenResumed) }
-
-    LaunchedEffectCollectEffects(viewModel) { effect ->
+    CollectEffects(viewModel.effect) { effect ->
         when (effect) {
             is DashboardEffect.NavigateToAddTask -> onNavigateToAddTask()
-            is DashboardEffect.NavigateToEditTask -> onNavigateToEditTask(effect.task)
-            is DashboardEffect.ShowError -> errorMessage = effect.message
+            is DashboardEffect.NavigateToEditTask -> onNavigateToEditTask(effect.taskId)
         }
     }
 
+    // The message is state, so it survives rotation and is cleared through an event rather than by
+    // mutating a second copy of it held in the composition. MessageHost owns the snackbar
+    // sequencing, which all three screens used to spell out for themselves.
+    val message = state.message
+    MessageHost(
+        snackbarHostState = snackbarHostState,
+        message = message,
+        messageText = message?.let { stringResource(it.value.toStringResource()) },
+        onShown = { viewModel.onEvent(DashboardEvent.MessageShown) },
+        actionLabel = stringResource(CoreRes.string.core_action_retry),
+        // "Retry" retries: it re-subscribes to the task flow rather than only hiding the message.
+        onAction = { viewModel.onEvent(DashboardEvent.RetryClicked) }
+            .takeIf { message?.value == DashboardMessage.LoadFailed },
+        suppressed = state.hasTerminalLoadFailure,
+    )
+
+    DashboardContent(
+        state = state,
+        snackbarHostState = snackbarHostState,
+        onEvent = viewModel::onEvent,
+        fabModifier = with(sharedTransitionScope) {
+            Modifier.sharedBounds(
+                sharedContentState = rememberSharedContentState(ADD_TASK_SHARED_KEY),
+                animatedVisibilityScope = animatedVisibilityScope,
+                boundsTransform = NavAnimation.boundsTransform,
+            )
+        },
+    )
+}
+
+/**
+ * Stateless: it takes the state and a single event sink, never the ViewModel. That keeps it
+ * previewable and testable, and stops leaf composables from depending on the whole screen's model.
+ */
+@Composable
+internal fun DashboardContent(
+    state: DashboardState,
+    snackbarHostState: SnackbarHostState,
+    onEvent: (DashboardEvent) -> Unit,
+    fabModifier: Modifier = Modifier,
+) {
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            with(sharedTransitionScope) {
-                FloatingActionButton(
-                    onClick = { viewModel.onEvent(DashboardEvent.AddTaskClicked) },
-                    modifier = Modifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(AddTaskSharedKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = { _, _ -> tween(500) },
-                    ),
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                }
+            FloatingActionButton(
+                onClick = { onEvent(DashboardEvent.AddTaskClicked) },
+                modifier = fabModifier,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = stringResource(Res.string.tasks_add_task))
             }
         },
     ) { padding ->
-        if (state.isLoading) {
-            LoadingView(modifier = Modifier.padding(padding))
-            return@Scaffold
-        }
-
-        errorMessage?.let { message ->
-            ErrorView(
-                message = message,
-                modifier = Modifier.padding(padding),
-                onRetry = { errorMessage = null },
-            )
-            return@Scaffold
-        }
-
-        Column(
+        LoadableContent(
+            isLoading = state.isLoading,
+            hasTerminalLoadFailure = state.hasTerminalLoadFailure,
+            errorMessage = stringResource(Res.string.tasks_error_load_failed),
+            onRetry = { onEvent(DashboardEvent.RetryClicked) },
+            // Background first, insets second: the colour fills the window edge to edge while the
+            // content stays clear of the system bars, which is what the hand-rolled
+            // `padding(top = …)` was reaching for while dropping the other three edges.
             modifier = Modifier
                 .fillMaxSize()
                 .background(color = MaterialTheme.colorScheme.background)
-                .padding(top = padding.calculateTopPadding()),
+                .padding(padding),
         ) {
-            val pagerState = rememberPagerState { state.days.size }
-            LaunchedEffect(pagerState.currentPage) {
-                viewModel.onEvent(DashboardEvent.DismissActions)
-            }
-            HorizontalPager(
-                state = pagerState,
-                contentPadding = PaddingValues(horizontal = 32.dp),
-                verticalAlignment = Alignment.Top,
-                modifier = Modifier.fillMaxSize(),
-            ) { page ->
-                DayColumn(state.days[page], state.revealedTaskId, viewModel)
+            Column(modifier = Modifier.fillMaxSize()) {
+                val pagerState = rememberPagerState { state.days.size }
+                // Changes only, not the first composition.
+                //
+                // A LaunchedEffect runs its block when it enters composition, so keying it on
+                // `currentPage` dismissed the revealed actions on the first frame — which is the
+                // frame that had just restored `revealedTaskId` from saved state. The one thing
+                // this screen persists was wiped every rotation and every return from the editor.
+                // Reading `currentPage` in the composable body also subscribed this scope to it, so
+                // the pager's parent recomposed on every settle.
+                LaunchedEffect(pagerState) {
+                    snapshotFlow { pagerState.currentPage }
+                        .drop(1)
+                        .collect { onEvent(DashboardEvent.DismissActions) }
+                }
+                HorizontalPager(
+                    state = pagerState,
+                    contentPadding = PaddingValues(horizontal = Spacing.xxl),
+                    verticalAlignment = Alignment.Top,
+                    modifier = Modifier.fillMaxSize(),
+                ) { page ->
+                    DayColumn(
+                        day = state.days[page],
+                        revealedTaskId = state.revealedTaskId,
+                        completingTaskIds = state.completingTaskIds,
+                        onEvent = onEvent,
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun DayColumn(day: DashboardDay, revealedTaskId: Long?, viewModel: DashboardViewModel) {
+private fun DayColumn(
+    day: DashboardDay,
+    revealedTaskId: Long?,
+    completingTaskIds: Set<Long>,
+    onEvent: (DashboardEvent) -> Unit,
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxSize(),
     ) {
-        Text(
-            text = day.date.toCardDisplayString(),
-            style = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(8.dp),
-        )
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        // One heading node, two lines. Marking it as a heading is what lets TalkBack and VoiceOver
+        // jump between days; without it, reaching the fifth day meant swiping through every card
+        // before it.
+        Column(
             horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .padding(Spacing.sm)
+                .semantics(mergeDescendants = true) { heading() },
+        ) {
+            Text(
+                text = day.date.toDateLine(),
+                style = MaterialTheme.typography.dayHeading,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = day.date.toWeekdayLine(),
+                style = MaterialTheme.typography.dayHeading,
+                textAlign = TextAlign.Center,
+            )
+        }
+        if (day.tasks.isEmpty()) {
+            Text(
+                text = stringResource(Res.string.tasks_empty_day),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = Spacing.xl, start = Spacing.lg, end = Spacing.lg),
+            )
+            return@Column
+        }
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            // Scaffold reserves no room for its own FAB, so without this the last card of a full
+            // day comes to rest underneath it with its actions unreachable.
+            contentPadding = PaddingValues(bottom = Sizing.fabClearance),
         ) {
             items(day.tasks, key = { it.id }) { task ->
-                TaskCard(task, revealed = task.id == revealedTaskId, viewModel)
+                TaskCard(
+                    task = task,
+                    // The column's own date, not the task's: a periodic task appears on several
+                    // pages, and completing it has to mean "this occurrence".
+                    onDate = day.date,
+                    revealed = task.id == revealedTaskId,
+                    canSubmit = task.id !in completingTaskIds,
+                    onEvent = onEvent,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun TaskCard(task: Task, revealed: Boolean, viewModel: DashboardViewModel) {
+private fun TaskCard(
+    task: Task,
+    onDate: LocalDate,
+    revealed: Boolean,
+    canSubmit: Boolean,
+    onEvent: (DashboardEvent) -> Unit,
+) {
     Card(
         colors = CardDefaults.cardColors().copy(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
         ),
-        modifier = Modifier.animateContentSize(),
+        // Material's clickable Surface sets no semantic role by default, so this card — the only
+        // way to reach Edit and Complete — reached a screen reader as an unnamed clickable with no
+        // announced action. The grocery row already does this; the two had drifted apart.
+        modifier = Modifier
+            .animateContentSize()
+            .semantics { role = Role.Button },
         onClick = {
-            viewModel.onEvent(
+            onEvent(
                 if (revealed) DashboardEvent.DismissActions else DashboardEvent.RevealActions(task.id),
             )
         },
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth(if (revealed) 1.0f else 0.9f)
-                .padding(12.dp),
+                .fillMaxWidth(if (revealed) 1.0f else Sizing.CARD_WIDTH_FRACTION)
+                .padding(Spacing.md),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -187,33 +285,43 @@ private fun TaskCard(task: Task, revealed: Boolean, viewModel: DashboardViewMode
             ) {
                 Text(
                     text = task.name,
-                    style = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.itemTitle,
                     modifier = Modifier.weight(1.0f),
                 )
-                task.hour?.let {
-                    Text(text = it.toString(), modifier = Modifier.padding(start = 4.dp))
+                task.schedule.hour?.let {
+                    Text(text = it.toFieldString(), modifier = Modifier.padding(start = Spacing.xs))
                 }
             }
             task.description?.let {
-                Text(text = it, modifier = Modifier.padding(top = 4.dp))
+                Text(text = it, modifier = Modifier.padding(top = Spacing.xs))
             }
             if (revealed) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
-                    Button(onClick = { viewModel.onEvent(DashboardEvent.EditTaskClicked(task)) }) {
-                        Text("Edit")
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(Icons.Outlined.Edit, contentDescription = null)
+                    Button(onClick = { onEvent(DashboardEvent.EditTaskClicked(task.id)) }) {
+                        Text(stringResource(Res.string.tasks_edit_task))
+                        Spacer(modifier = Modifier.width(Spacing.xs))
+                        Icon(Icons.Filled.Edit, contentDescription = null)
                     }
-                    Button(onClick = { viewModel.onEvent(DashboardEvent.CompleteTask(task)) }) {
-                        Text("Complete")
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(Icons.Outlined.CheckCircle, contentDescription = null)
+                    Button(
+                        onClick = { onEvent(DashboardEvent.CompleteTask(task.id, onDate)) },
+                        // Stays disabled until the write comes back: a live tick over a task that
+                        // is already being completed is what let a double tap advance it twice.
+                        enabled = canSubmit,
+                    ) {
+                        Text(stringResource(Res.string.tasks_complete_task))
+                        Spacer(modifier = Modifier.width(Spacing.xs))
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null)
                     }
                 }
             }
         }
     }
+}
+
+private fun DashboardMessage.toStringResource() = when (this) {
+    DashboardMessage.LoadFailed -> Res.string.tasks_error_load_failed
+    DashboardMessage.CompleteFailed -> Res.string.tasks_error_complete_failed
 }

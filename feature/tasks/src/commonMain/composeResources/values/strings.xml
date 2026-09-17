@@ -1,0 +1,49 @@
+<resources>
+    <string name="tasks_tab_title">Tasks</string>
+
+    <string name="tasks_add_task">Add task</string>
+    <string name="tasks_edit_task">Edit</string>
+    <string name="tasks_complete_task">Complete</string>
+    <string name="tasks_empty_day">Nothing planned for this day</string>
+
+    <string name="tasks_field_name">Task name</string>
+    <string name="tasks_field_description">Task description</string>
+    <string name="tasks_field_date">Date</string>
+    <string name="tasks_field_start_date">Start date</string>
+    <string name="tasks_field_end_date">End date</string>
+    <string name="tasks_field_hour">Hour</string>
+    <string name="tasks_repeat_every">Repeat every</string>
+
+    <string name="tasks_type_asap">ASAP</string>
+    <string name="tasks_type_one_time">Specific day</string>
+    <string name="tasks_type_periodic">Periodic</string>
+
+    <string name="tasks_action_save">Save</string>
+    <!-- No tasks_action_delete: "Delete" is generic action vocabulary and lives in core:ui, which
+         this screen was already using for the confirmation dialog's button. Two resources for one
+         word, twelve lines apart, are two translations that can disagree. -->
+    <string name="tasks_delete_confirm_title">Delete this task?</string>
+    <string name="tasks_delete_confirm_body">This cannot be undone.</string>
+
+    <!-- Spoken by a screen reader on a field that opens a picker rather than a keyboard. -->
+    <!-- The value only. The gesture is the assistive service's to describe, not ours: TalkBack
+         appends its own hint for a Button, so spelling out "double tap" said it twice and said the
+         wrong thing entirely for Switch Access, a braille display or a keyboard. -->
+    <string name="tasks_a11y_pick_date">%1$s, %2$s</string>
+    <string name="tasks_a11y_pick_time">%1$s, %2$s</string>
+    <!-- Action labels, announced by each service in its own words ("double tap to …", "press Enter to …"). -->
+    <string name="tasks_a11y_action_choose_date">choose a date</string>
+    <string name="tasks_a11y_action_choose_time">choose a time</string>
+    <string name="tasks_a11y_not_set">not set</string>
+
+    <string name="tasks_error_load_failed">Could not load your tasks</string>
+    <string name="tasks_error_complete_failed">Could not complete this task</string>
+    <string name="tasks_error_save_failed">Could not save this task</string>
+    <string name="tasks_error_delete_failed">Could not delete this task</string>
+    <string name="tasks_error_task_gone">This task no longer exists</string>
+    <string name="tasks_error_name_blank">Enter a name</string>
+    <string name="tasks_error_interval_invalid">Enter a number of days greater than zero</string>
+    <string name="tasks_error_end_before_start">End date cannot be before the start date</string>
+
+    <string name="tasks_card_date">%1$d %2$s %3$d</string>
+</resources>

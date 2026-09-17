@@ -1,0 +1,14 @@
+<resources>
+    <!--
+      The unit of the repeat interval.
+
+      It used to be a flat "days" label sitting after the entry box, so an interval of 1 read
+      "Repeat every 1 days" — and, because the sentence was assembled from three separate
+      composables, a translator could neither reorder it nor inflect the unit. Polish alone needs
+      three forms ("1 dzien", "2 dni", "5 dni"), which no fixed suffix can express.
+    -->
+    <plurals name="tasks_repeat_days">
+        <item quantity="one">day</item>
+        <item quantity="other">days</item>
+    </plurals>
+</resources>

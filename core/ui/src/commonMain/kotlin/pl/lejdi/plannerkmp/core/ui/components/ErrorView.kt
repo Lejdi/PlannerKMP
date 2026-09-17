@@ -12,24 +12,36 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.resources.stringResource
+import pl.lejdi.plannerkmp.core.ui.resources.Res
+import pl.lejdi.plannerkmp.core.ui.resources.core_action_retry
+import pl.lejdi.plannerkmp.core.ui.theme.Spacing
 
+/**
+ * A full-screen failure with an optional retry.
+ *
+ * [message] is a parameter, never a literal: the wording of a failure belongs to the feature that
+ * knows what failed. [retryLabel] defaults to this module's own generic "Retry", which carries no
+ * domain and which every feature was otherwise declaring for itself — a screen that wants different
+ * wording still passes it.
+ */
 @Composable
 fun ErrorView(
     message: String,
     modifier: Modifier = Modifier,
+    retryLabel: String? = stringResource(Res.string.core_action_retry),
     onRetry: (() -> Unit)? = null,
 ) {
     Column(
-        modifier = modifier.fillMaxSize().padding(16.dp),
+        modifier = modifier.fillMaxSize().padding(Spacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Text(text = message, style = MaterialTheme.typography.bodyLarge)
-        if (onRetry != null) {
-            Spacer(modifier = Modifier.height(8.dp))
+        if (onRetry != null && retryLabel != null) {
+            Spacer(modifier = Modifier.height(Spacing.sm))
             Button(onClick = onRetry) {
-                Text("Retry")
+                Text(retryLabel)
             }
         }
     }

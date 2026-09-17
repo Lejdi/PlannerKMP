@@ -4,10 +4,8 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -17,249 +15,293 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.Role
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
-import pl.lejdi.plannerkmp.core.ui.components.ErrorView
-import pl.lejdi.plannerkmp.core.ui.components.LoadingView
+import pl.lejdi.plannerkmp.core.ui.components.LoadableContent
+import pl.lejdi.plannerkmp.core.ui.components.MessageHost
+import pl.lejdi.plannerkmp.core.ui.components.PlainTextField
+import pl.lejdi.plannerkmp.core.ui.resources.core_action_cancel
+import pl.lejdi.plannerkmp.core.ui.resources.core_action_retry
+import pl.lejdi.plannerkmp.core.ui.resources.core_action_undo
+import pl.lejdi.plannerkmp.core.ui.theme.Sizing
+import pl.lejdi.plannerkmp.core.ui.theme.Spacing
+import pl.lejdi.plannerkmp.core.ui.theme.itemTitle
 import pl.lejdi.plannerkmp.feature.grocery.domain.GroceryItem
+import pl.lejdi.plannerkmp.feature.grocery.resources.Res
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_action_confirm
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_add_item
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_complete_item
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_edit_item
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_empty_list
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_error_delete_failed
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_error_item_gone
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_error_load_failed
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_error_save_failed
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_field_description
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_field_name
+import pl.lejdi.plannerkmp.feature.grocery.resources.grocery_item_completed
+import pl.lejdi.plannerkmp.core.ui.resources.Res as CoreRes
 
 @Composable
 fun GroceryListScreen(viewModel: GroceryListViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(viewModel) {
-        viewModel.effect.collect { effect ->
-            when (effect) {
-                is GroceryListEffect.ShowError -> errorMessage = effect.message
+    val message = state.message
+    MessageHost(
+        snackbarHostState = snackbarHostState,
+        message = message,
+        messageText = message?.let { stringResource(it.value.toStringResource()) },
+        onShown = { viewModel.onEvent(GroceryListEvent.MessageShown) },
+        // The same snackbar slot carries two different actions, chosen by the message: a retry for
+        // a failed load, and an undo for the completion that just removed a row.
+        actionLabel = when (message?.value) {
+            GroceryMessage.ItemCompleted -> stringResource(CoreRes.string.core_action_undo)
+            else -> stringResource(CoreRes.string.core_action_retry)
+        },
+        onAction = when (message?.value) {
+            GroceryMessage.LoadFailed -> {
+                { viewModel.onEvent(GroceryListEvent.RetryClicked) }
             }
-        }
-    }
+            GroceryMessage.ItemCompleted -> {
+                { viewModel.onEvent(GroceryListEvent.UndoCompleteClicked) }
+            }
+            else -> null
+        },
+        suppressed = state.hasTerminalLoadFailure,
+    )
 
-    Scaffold { padding ->
-        if (state.isLoading) {
-            LoadingView(modifier = Modifier.padding(padding))
-            return@Scaffold
-        }
+    GroceryListContent(
+        state = state,
+        snackbarHostState = snackbarHostState,
+        onEvent = viewModel::onEvent,
+    )
+}
 
-        errorMessage?.let { message ->
-            ErrorView(
-                message = message,
-                modifier = Modifier.padding(padding),
-                onRetry = { errorMessage = null },
-            )
-            return@Scaffold
-        }
-
-        Column(
+/** Stateless: takes the state and one event sink, never the ViewModel. */
+@Composable
+internal fun GroceryListContent(
+    state: GroceryListState,
+    snackbarHostState: SnackbarHostState,
+    onEvent: (GroceryListEvent) -> Unit,
+) {
+    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
+        LoadableContent(
+            isLoading = state.isLoading,
+            hasTerminalLoadFailure = state.hasTerminalLoadFailure,
+            errorMessage = stringResource(Res.string.grocery_error_load_failed),
+            onRetry = { onEvent(GroceryListEvent.RetryClicked) },
             modifier = Modifier
                 .fillMaxSize()
                 .background(color = MaterialTheme.colorScheme.background)
-                .padding(top = padding.calculateTopPadding()),
+                .padding(padding),
         ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                item { Spacer(modifier = Modifier.height(16.dp)) }
-                items(state.items, key = { it.id }) { item ->
-                    if (state.editingItemId == item.id) {
-                        EditRow(state, viewModel)
-                    } else {
-                        GroceryRow(item, viewModel)
+            Column(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    item(key = "top-spacer") { Spacer(modifier = Modifier.height(Spacing.lg)) }
+
+                    if (state.items.isEmpty() && state.editor?.target != EditorTarget.New) {
+                        item(key = "empty-state") {
+                            Text(
+                                text = stringResource(Res.string.grocery_empty_list),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = Spacing.xl, horizontal = Spacing.lg),
+                            )
+                        }
+                    }
+
+                    items(state.items, key = { it.id }) { item ->
+                        val editor = state.editor
+                        if (editor != null && editor.target == EditorTarget.Existing(item.id)) {
+                            InlineEditCard(
+                                editor = editor,
+                                canSubmit = !state.isEditorBusy,
+                                onEvent = onEvent,
+                            )
+                        } else {
+                            GroceryRow(
+                                item = item,
+                                // This row only, so completing one item leaves the rest tappable.
+                                canSubmit = !state.isCompleting(item.id),
+                                onEvent = onEvent,
+                            )
+                        }
+                    }
+
+                    // Keyed: without one the trailing item's identity is its index, so it is
+                    // disposed and rebuilt whenever the list length changes — and it hosts the
+                    // "new item" editor, whose text fields would lose focus and dismiss the IME.
+                    item(key = "add-control") {
+                        AddControl(
+                            editor = state.editor,
+                            canSubmit = !state.isEditorBusy,
+                            onEvent = onEvent,
+                        )
                     }
                 }
-                item { AddControl(state, viewModel) }
             }
         }
     }
 }
 
 @Composable
-private fun AddControl(state: GroceryListState, viewModel: GroceryListViewModel) {
-    Column(modifier = Modifier.padding(bottom = 16.dp).animateContentSize()) {
-        if (state.isAddExpanded) {
-            InlineEditCard(
-                name = state.addName,
-                onNameChange = { viewModel.onEvent(GroceryListEvent.AddNameChanged(it)) },
-                nameError = state.addNameError,
-                namePlaceholder = "Product name",
-                description = state.addDescription,
-                onDescriptionChange = { viewModel.onEvent(GroceryListEvent.AddDescriptionChanged(it)) },
-                descriptionPlaceholder = "Additional information",
-                onConfirm = { viewModel.onEvent(GroceryListEvent.AddConfirmClicked) },
-                onCancel = { viewModel.onEvent(GroceryListEvent.AddCancelClicked) },
-            )
+private fun AddControl(
+    editor: GroceryEditor?,
+    canSubmit: Boolean,
+    onEvent: (GroceryListEvent) -> Unit,
+) {
+    Column(modifier = Modifier.padding(bottom = Spacing.lg).animateContentSize()) {
+        if (editor != null && editor.target == EditorTarget.New) {
+            InlineEditCard(editor = editor, canSubmit = canSubmit, onEvent = onEvent)
         } else {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 FloatingActionButton(
-                    onClick = { viewModel.onEvent(GroceryListEvent.AddExpandClicked) },
-                    modifier = Modifier.padding(16.dp),
+                    onClick = { onEvent(GroceryListEvent.EditorOpened(EditorTarget.New)) },
+                    modifier = Modifier.padding(Spacing.lg),
                 ) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(Res.string.grocery_add_item))
                 }
             }
         }
     }
-}
-
-@Composable
-private fun EditRow(state: GroceryListState, viewModel: GroceryListViewModel) {
-    InlineEditCard(
-        name = state.editName,
-        onNameChange = { viewModel.onEvent(GroceryListEvent.EditNameChanged(it)) },
-        nameError = state.editNameError,
-        namePlaceholder = "Product name",
-        description = state.editDescription,
-        onDescriptionChange = { viewModel.onEvent(GroceryListEvent.EditDescriptionChanged(it)) },
-        descriptionPlaceholder = "Additional information",
-        onConfirm = { viewModel.onEvent(GroceryListEvent.EditConfirmClicked) },
-        onCancel = { viewModel.onEvent(GroceryListEvent.EditCancelClicked) },
-    )
 }
 
 @Composable
 private fun InlineEditCard(
-    name: String,
-    onNameChange: (String) -> Unit,
-    nameError: Boolean,
-    namePlaceholder: String,
-    description: String,
-    onDescriptionChange: (String) -> Unit,
-    descriptionPlaceholder: String,
-    onConfirm: () -> Unit,
-    onCancel: () -> Unit,
+    editor: GroceryEditor,
+    canSubmit: Boolean,
+    onEvent: (GroceryListEvent) -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.secondaryContainer),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(0.9f).padding(12.dp),
+            modifier = Modifier.fillMaxWidth(Sizing.CARD_WIDTH_FRACTION).padding(Spacing.md),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(
-                modifier = Modifier.defaultMinSize(minHeight = 84.dp).weight(1f).padding(end = 8.dp),
+                modifier = Modifier
+                    .defaultMinSize(minHeight = Sizing.inlineEditorMinHeight)
+                    .weight(1f)
+                    .padding(end = Spacing.sm),
             ) {
                 PlainTextField(
-                    value = name,
-                    onValueChange = onNameChange,
-                    textStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold),
-                    placeholder = namePlaceholder,
-                    isError = nameError,
+                    value = editor.name,
+                    onValueChange = { onEvent(GroceryListEvent.EditorNameChanged(it)) },
+                    textStyle = MaterialTheme.typography.itemTitle,
+                    placeholder = stringResource(Res.string.grocery_field_name),
+                    isError = editor.nameError,
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Spacing.sm))
                 PlainTextField(
-                    value = description,
-                    onValueChange = onDescriptionChange,
+                    value = editor.description,
+                    onValueChange = { onEvent(GroceryListEvent.EditorDescriptionChanged(it)) },
                     textStyle = LocalTextStyle.current,
-                    placeholder = descriptionPlaceholder,
+                    placeholder = stringResource(Res.string.grocery_field_description),
                     singleLine = false,
                 )
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = onConfirm) {
-                    Icon(imageVector = Icons.Outlined.CheckCircle, contentDescription = null)
+                IconButton(
+                    onClick = { onEvent(GroceryListEvent.EditorConfirmed) },
+                    enabled = canSubmit,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = stringResource(Res.string.grocery_action_confirm),
+                    )
                 }
-                TextButton(onClick = onCancel) { Text("Cancel") }
+                TextButton(onClick = { onEvent(GroceryListEvent.EditorCancelled) }) {
+                    Text(stringResource(CoreRes.string.core_action_cancel))
+                }
             }
         }
     }
 }
 
+/**
+ * A row, with editing reachable two ways.
+ *
+ * Editing used to be a long-press and nothing else, on a card whose `onClick` was an empty lambda:
+ * an affordance with no visual sign that it existed, no way to discover it, and — because a long
+ * press carries no announced action — no way for a screen-reader user to reach it at all. The
+ * long press stays, now labelled so assistive technology can offer it, and an explicit button
+ * makes it visible for everyone else.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GroceryRow(item: GroceryItem, viewModel: GroceryListViewModel) {
+private fun GroceryRow(item: GroceryItem, canSubmit: Boolean, onEvent: (GroceryListEvent) -> Unit) {
+    val editLabel = stringResource(Res.string.grocery_edit_item)
+    val openEditor = { onEvent(GroceryListEvent.EditorOpened(EditorTarget.Existing(item.id))) }
     Card(
         colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.secondaryContainer),
         modifier = Modifier
             .animateContentSize()
             .combinedClickable(
-                onLongClick = { viewModel.onEvent(GroceryListEvent.EditExpandClicked(item)) },
-                onClick = {},
+                onLongClickLabel = editLabel,
+                onLongClick = openEditor,
+                onClick = openEditor,
+                role = Role.Button,
             ),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(0.9f).padding(12.dp),
+            modifier = Modifier.fillMaxWidth(Sizing.CARD_WIDTH_FRACTION).padding(Spacing.md),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text(text = item.name, style = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold))
-                item.description?.let { Text(text = it, modifier = Modifier.padding(top = 4.dp)) }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = item.name, style = MaterialTheme.typography.itemTitle)
+                item.description?.let { Text(text = it, modifier = Modifier.padding(top = Spacing.xs)) }
             }
-            IconButton(onClick = { viewModel.onEvent(GroceryListEvent.CompleteItem(item.id)) }) {
-                Icon(imageVector = Icons.Outlined.CheckCircle, contentDescription = null)
+            IconButton(onClick = openEditor) {
+                Icon(imageVector = Icons.Filled.Edit, contentDescription = editLabel)
+            }
+            IconButton(
+                onClick = { onEvent(GroceryListEvent.CompleteItem(item.id)) },
+                enabled = canSubmit,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = stringResource(Res.string.grocery_complete_item),
+                )
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PlainTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    textStyle: TextStyle,
-    placeholder: String,
-    singleLine: Boolean = true,
-    isError: Boolean = false,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
-        visualTransformation = VisualTransformation.None,
-        interactionSource = interactionSource,
-        singleLine = singleLine,
-        textStyle = if (isError) textStyle.copy(color = MaterialTheme.colorScheme.error) else textStyle,
-    ) { innerTextField ->
-        TextFieldDefaults.DecorationBox(
-            value = value,
-            visualTransformation = VisualTransformation.None,
-            innerTextField = innerTextField,
-            singleLine = singleLine,
-            enabled = true,
-            interactionSource = interactionSource,
-            contentPadding = PaddingValues(bottom = 4.dp),
-            placeholder = { Text(text = placeholder, style = textStyle) },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                unfocusedIndicatorColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.4f),
-            ),
-        )
-    }
+private fun GroceryMessage.toStringResource() = when (this) {
+    GroceryMessage.ItemCompleted -> Res.string.grocery_item_completed
+    GroceryMessage.LoadFailed -> Res.string.grocery_error_load_failed
+    GroceryMessage.SaveFailed -> Res.string.grocery_error_save_failed
+    GroceryMessage.DeleteFailed -> Res.string.grocery_error_delete_failed
+    GroceryMessage.ItemNoLongerExists -> Res.string.grocery_error_item_gone
 }

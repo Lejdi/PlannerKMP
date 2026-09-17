@@ -1,22 +1,30 @@
 package pl.lejdi.plannerkmp.feature.tasks.ui
 
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.minus
 import kotlinx.datetime.plus
-import pl.lejdi.plannerkmp.feature.tasks.FakeTodayProvider
-import pl.lejdi.plannerkmp.feature.tasks.data.FakeTasksDatasource
-import pl.lejdi.plannerkmp.feature.tasks.domain.GetTasksForDashboard
+import pl.lejdi.plannerkmp.core.common.DomainError
+import pl.lejdi.plannerkmp.core.testing.FakeTodayProvider
+import pl.lejdi.plannerkmp.core.testing.NoOpLogger
+import pl.lejdi.plannerkmp.core.testing.TestCoroutineDispatchers
+import pl.lejdi.plannerkmp.feature.tasks.domain.FakeTasksDatasource
 import pl.lejdi.plannerkmp.feature.tasks.domain.MarkTaskComplete
-import pl.lejdi.plannerkmp.feature.tasks.domain.Task
-import pl.lejdi.plannerkmp.feature.tasks.domain.UpdateTasksDates
+import pl.lejdi.plannerkmp.feature.tasks.domain.ObserveTasksForDashboard
+import pl.lejdi.plannerkmp.feature.tasks.domain.TaskDraft
+import pl.lejdi.plannerkmp.feature.tasks.domain.TaskSchedule
+import pl.lejdi.plannerkmp.feature.tasks.domain.TasksWrite
+import pl.lejdi.plannerkmp.feature.tasks.domain.anchorDate
+import pl.lejdi.plannerkmp.feature.tasks.domain.oneTimeTask
+import pl.lejdi.plannerkmp.feature.tasks.domain.periodicTask
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -40,110 +48,237 @@ class DashboardViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(datasource: FakeTasksDatasource, todayProvider: FakeTodayProvider = FakeTodayProvider(today)) =
-        DashboardViewModel(
-            getTasksForDashboard = GetTasksForDashboard(datasource, todayProvider),
-            updateTasksDates = UpdateTasksDates(datasource, todayProvider),
-            markTaskComplete = MarkTaskComplete(datasource),
-        )
+    private fun task(id: Long = 1, startDate: LocalDate = today, daysInterval: Int = 0) =
+        if (daysInterval > 0) {
+            periodicTask(id = id, name = "Task $id", startDate = startDate, daysInterval = daysInterval)
+        } else {
+            oneTimeTask(id = id, name = "Task $id", date = startDate)
+        }
+
+    private fun viewModel(
+        datasource: FakeTasksDatasource = FakeTasksDatasource(),
+        todayProvider: FakeTodayProvider = FakeTodayProvider(today),
+        savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    ): DashboardViewModel = DashboardViewModel(
+        savedStateHandle,
+        NoOpLogger(),
+        // Unconfined for both dispatchers, so the use case's flowOn runs inline.
+        ObserveTasksForDashboard(datasource, todayProvider, TestCoroutineDispatchers(Dispatchers.Unconfined)),
+        MarkTaskComplete(datasource),
+    )
 
     @Test
-    fun loadsEightDaysOnScreenResumed() = runTest {
-        val viewModel = viewModel(FakeTasksDatasource())
+    fun loadsTheEightDayWindowOnCreation() = runTest {
+        val viewModel = viewModel(FakeTasksDatasource(initialTasks = listOf(task())))
+        runCurrent()
 
-        viewModel.onEvent(DashboardEvent.ScreenResumed)
-
-        assertFalse(viewModel.state.value.isLoading)
-        assertEquals(8, viewModel.state.value.days.size)
-        assertEquals(today, viewModel.state.value.days.first().date)
+        val state = viewModel.state.value
+        assertFalse(state.isLoading)
+        assertEquals(8, state.days.size)
+        assertEquals(1, state.days.first().tasks.size)
     }
 
     @Test
-    fun runsCleanupBeforeLoadingSoStaleTasksAreAlreadyGone() = runTest {
-        // A one-time task with a past startDate is deleted by the cleanup rule (daysInterval == 0,
-        // not asap, startDate < today). Asserting against the datasource's own state (rather than the
-        // dashboard's returned days) is what actually proves cleanup ran as part of the reload: the
-        // dashboard's forward-looking 8-day window would never show this task either way.
-        val staleTask = Task(1, "Stale", null, today.minus(5, DateTimeUnit.DAY), null, null, 0, false)
-        val datasource = FakeTasksDatasource(initialTasks = listOf(staleTask))
-        val viewModel = viewModel(datasource)
-
-        viewModel.onEvent(DashboardEvent.ScreenResumed)
-
-        assertTrue(datasource.tasks.isEmpty(), "cleanup should have deleted the stale task from the datasource")
-        assertEquals(today, datasource.lastCleanupDate)
-    }
-
-    @Test
-    fun screenResumedReloadsTasksAddedOnAnotherScreenWhileThisViewModelWasRetained() = runTest {
-        // Regression test: Nav3 retains this ViewModel instance across the back stack, so a task
-        // added via TaskEditScreen (a different ViewModel) must show up here without recreating
-        // DashboardViewModel - only re-firing ScreenResumed, exactly like returning from that screen.
+    fun picksUpAChangeMadeElsewhereWithoutBeingAskedToReload() = runTest {
         val datasource = FakeTasksDatasource()
         val viewModel = viewModel(datasource)
-        viewModel.onEvent(DashboardEvent.ScreenResumed)
-        assertEquals(0, viewModel.state.value.days.sumOf { it.tasks.size })
+        runCurrent()
+        assertTrue(viewModel.state.value.days.first().tasks.isEmpty())
 
-        datasource.tasks.add(Task(1, "Added elsewhere", null, today, null, null, 0, false))
-        viewModel.onEvent(DashboardEvent.ScreenResumed)
+        // Stands in for the edit screen saving a task while the dashboard is on the back stack.
+        datasource.addTask(
+            TaskDraft.ofStored("Added elsewhere", null, TaskSchedule.OneTime(today)),
+        )
+        runCurrent()
 
-        assertEquals(1, viewModel.state.value.days.sumOf { it.tasks.size })
+        assertEquals("Added elsewhere", viewModel.state.value.days.first().tasks.single().name)
     }
 
     @Test
-    fun revealActionsSetsRevealedTaskId() = runTest {
-        val viewModel = viewModel(FakeTasksDatasource())
+    fun revealAndDismissToggleTheRevealedTask() = runTest {
+        val viewModel = viewModel(FakeTasksDatasource(initialTasks = listOf(task())))
+        runCurrent()
 
-        viewModel.onEvent(DashboardEvent.RevealActions(taskId = 5))
-
-        assertEquals(5, viewModel.state.value.revealedTaskId)
-    }
-
-    @Test
-    fun dismissActionsClearsRevealedTaskId() = runTest {
-        val viewModel = viewModel(FakeTasksDatasource())
-        viewModel.onEvent(DashboardEvent.RevealActions(taskId = 5))
+        viewModel.onEvent(DashboardEvent.RevealActions(1))
+        assertEquals(1L, viewModel.state.value.revealedTaskId)
 
         viewModel.onEvent(DashboardEvent.DismissActions)
-
         assertNull(viewModel.state.value.revealedTaskId)
     }
 
     @Test
-    fun completeTaskDeletesOneTimeTaskAndReloads() = runTest {
-        val oneTimeTask = Task(1, "Task", null, today, null, null, 0, false)
-        val datasource = FakeTasksDatasource(initialTasks = listOf(oneTimeTask))
+    fun completingATaskRemovesItAndClearsTheReveal() = runTest {
+        val datasource = FakeTasksDatasource(initialTasks = listOf(task()))
         val viewModel = viewModel(datasource)
+        runCurrent()
+        viewModel.onEvent(DashboardEvent.RevealActions(1))
 
-        viewModel.onEvent(DashboardEvent.CompleteTask(oneTimeTask))
+        viewModel.onEvent(DashboardEvent.CompleteTask(task().id, today))
+        runCurrent()
 
-        assertEquals(0, viewModel.state.value.days.sumOf { it.tasks.size })
+        assertTrue(datasource.tasks.isEmpty())
+        assertNull(viewModel.state.value.revealedTaskId)
+        assertTrue(viewModel.state.value.days.first().tasks.isEmpty())
     }
 
     @Test
-    fun cleanupFailureOnLoadShowsErrorEffectAndStillLoadsTheDashboard() = runTest {
-        // The first datasource call of the load is the cleanup's getLastCleanupDate().
+    fun addAndEditRaiseNavigationEffectsCarryingOnlyTheId() = runTest {
+        val viewModel = viewModel(FakeTasksDatasource(initialTasks = listOf(task(id = 7))))
+        runCurrent()
+
+        viewModel.onEvent(DashboardEvent.AddTaskClicked)
+        assertEquals(DashboardEffect.NavigateToAddTask, viewModel.effect.first())
+
+        viewModel.onEvent(DashboardEvent.EditTaskClicked(7))
+        assertEquals(DashboardEffect.NavigateToEditTask(7), viewModel.effect.first())
+    }
+
+    @Test
+    fun aFailedLoadSurfacesAMessageInsteadOfRawDriverText() = runTest {
         val datasource = FakeTasksDatasource()
-        datasource.failNextCall = true
+        datasource.observeFailure = DomainError.Database("UNIQUE constraint failed: taskEntity.id")
         val viewModel = viewModel(datasource)
+        runCurrent()
 
-        viewModel.onEvent(DashboardEvent.ScreenResumed)
-
-        assertEquals(DashboardEffect.ShowError("fake failure"), viewModel.effect.first())
+        assertEquals(DashboardMessage.LoadFailed, viewModel.state.value.message?.value)
         assertFalse(viewModel.state.value.isLoading)
-        assertEquals(8, viewModel.state.value.days.size)
     }
 
     @Test
-    fun completeTaskFailureShowsErrorEffectAndKeepsTheTask() = runTest {
-        val oneTimeTask = Task(1, "Task", null, today, null, null, 0, false)
-        val datasource = FakeTasksDatasource(initialTasks = listOf(oneTimeTask))
+    fun aFailedCompletionReportsWithoutLosingTheList() = runTest {
+        val datasource = FakeTasksDatasource(initialTasks = listOf(task()))
         val viewModel = viewModel(datasource)
-        datasource.failNextCall = true
+        runCurrent()
+        // task() is a one-off, so completing it deletes rather than reschedules.
+        datasource.failNext(TasksWrite.Delete)
 
-        viewModel.onEvent(DashboardEvent.CompleteTask(oneTimeTask))
+        viewModel.onEvent(DashboardEvent.CompleteTask(task().id, today))
+        runCurrent()
 
-        assertEquals(DashboardEffect.ShowError("fake failure"), viewModel.effect.first())
-        assertEquals(listOf(oneTimeTask), datasource.tasks)
+        assertEquals(DashboardMessage.CompleteFailed, viewModel.state.value.message?.value)
+        assertEquals(1, viewModel.state.value.days.first().tasks.size)
+    }
+
+    @Test
+    fun aLoadFailureWithNothingToShowIsTerminal() = runTest {
+        val datasource = FakeTasksDatasource()
+        datasource.observeFailure = DomainError.Database("boom")
+        val viewModel = viewModel(datasource)
+        runCurrent()
+
+        // Nothing to put a snackbar over, so the screen shows a persistent retry instead.
+        assertTrue(viewModel.state.value.hasTerminalLoadFailure)
+    }
+
+    @Test
+    fun aFailureWithContentStillOnScreenIsNotTerminal() = runTest {
+        val datasource = FakeTasksDatasource(initialTasks = listOf(task()))
+        val viewModel = viewModel(datasource)
+        runCurrent()
+        // task() is a one-off, so completing it deletes rather than reschedules.
+        datasource.failNext(TasksWrite.Delete)
+
+        viewModel.onEvent(DashboardEvent.CompleteTask(task().id, today))
+        runCurrent()
+
+        assertEquals(DashboardMessage.CompleteFailed, viewModel.state.value.message?.value)
+        assertFalse(viewModel.state.value.hasTerminalLoadFailure)
+    }
+
+    @Test
+    fun messageShownClearsTheMessage() = runTest {
+        val datasource = FakeTasksDatasource()
+        datasource.observeFailure = DomainError.Database("boom")
+        val viewModel = viewModel(datasource)
+        runCurrent()
+        assertEquals(DashboardMessage.LoadFailed, viewModel.state.value.message?.value)
+
+        viewModel.onEvent(DashboardEvent.MessageShown)
+
+        assertNull(viewModel.state.value.message)
+    }
+
+    @Test
+    fun retryResubscribesAfterAFailure() = runTest {
+        val datasource = FakeTasksDatasource(initialTasks = listOf(task()))
+        datasource.observeFailure = DomainError.Database("boom")
+        val viewModel = viewModel(datasource)
+        runCurrent()
+        assertEquals(DashboardMessage.LoadFailed, viewModel.state.value.message?.value)
+
+        // Whatever was wrong is no longer wrong; Retry has to actually re-observe.
+        datasource.observeFailure = null
+        viewModel.onEvent(DashboardEvent.RetryClicked)
+        runCurrent()
+
+        assertNull(viewModel.state.value.message)
+        assertEquals(1, viewModel.state.value.days.first().tasks.size)
+    }
+
+    /**
+     * Two taps on one card must land one completion.
+     *
+     * The fake has had `blockWrites` for exactly this since it was written, and no dashboard test
+     * ever used it — so the guard whose absence advanced a periodic task by two intervals was
+     * covered by nothing.
+     */
+    @Test
+    fun tappingTheSameCardTwiceCompletesItOnce() = runTest {
+        val periodic = task(id = 1, startDate = today, daysInterval = 2)
+        val datasource = FakeTasksDatasource(initialTasks = listOf(periodic))
+        val viewModel = viewModel(datasource)
+        runCurrent()
+        datasource.blockWrites = true
+
+        viewModel.onEvent(DashboardEvent.CompleteTask(periodic.id, today))
+        viewModel.onEvent(DashboardEvent.CompleteTask(periodic.id, today))
+        datasource.releaseWrites()
+        runCurrent()
+
+        assertEquals(
+            today.plus(2, DateTimeUnit.DAY),
+            datasource.tasks.single().anchorDate,
+            "the second tap must not have advanced it a second interval",
+        )
+    }
+
+    /**
+     * A completion in flight on one card must not disable another.
+     *
+     * `isSubmitting` was one boolean for the whole screen, so the guard dropped a tap on any other
+     * card — on a day with several tasks, which is the ordinary case.
+     */
+    @Test
+    fun completingOneTaskLeavesTheOthersTappable() = runTest {
+        val first = task(id = 1, startDate = today)
+        val second = task(id = 2, startDate = today)
+        val datasource = FakeTasksDatasource(initialTasks = listOf(first, second))
+        val viewModel = viewModel(datasource)
+        runCurrent()
+        datasource.blockWrites = true
+
+        viewModel.onEvent(DashboardEvent.CompleteTask(first.id, today))
+        assertTrue(viewModel.state.value.isCompleting(1))
+        assertFalse(viewModel.state.value.isCompleting(2), "the other card stays live")
+
+        viewModel.onEvent(DashboardEvent.CompleteTask(second.id, today))
+        datasource.releaseWrites()
+        runCurrent()
+
+        assertTrue(datasource.tasks.isEmpty(), "both one-off tasks were completed")
+    }
+
+    /** The one field this screen persists, and the only reason it is a RestorableViewModel. */
+    @Test
+    fun theRevealedCardSurvivesProcessDeath() = runTest {
+        val datasource = FakeTasksDatasource(initialTasks = listOf(task()))
+        val handle = SavedStateHandle()
+        val first = viewModel(datasource, savedStateHandle = handle)
+        runCurrent()
+        first.onEvent(DashboardEvent.RevealActions(1))
+
+        val restored = viewModel(datasource, savedStateHandle = handle)
+
+        assertEquals(1L, restored.state.value.revealedTaskId)
     }
 }

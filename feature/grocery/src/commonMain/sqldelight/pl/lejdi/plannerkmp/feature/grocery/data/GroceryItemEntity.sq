@@ -4,8 +4,10 @@ CREATE TABLE groceryItemEntity (
     description TEXT
 );
 
+-- Ordered explicitly: nothing sorts this list downstream, so without an ORDER BY the order the
+-- user sees is whatever the query planner returns, which SQL does not guarantee is stable.
 selectAll:
-SELECT * FROM groceryItemEntity;
+SELECT * FROM groceryItemEntity ORDER BY id;
 
 insert:
 INSERT INTO groceryItemEntity(name, description) VALUES (:name, :description);

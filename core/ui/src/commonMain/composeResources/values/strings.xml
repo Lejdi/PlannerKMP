@@ -1,0 +1,19 @@
+<resources>
+    <!--
+      Generic UI vocabulary only.
+
+      `core:ui` deliberately owns no *feature* wording — "Could not load your tasks" belongs to the
+      feature that knows what a task is, and these components still take those strings as
+      parameters. What sits here is the handful of words that carry no domain at all and that every
+      feature was otherwise re-declaring: two features had their own "Retry", and each new one would
+      have added a third, translated separately.
+
+      A screen that wants different wording passes it; these are defaults, not decrees.
+    -->
+    <string name="core_action_retry">Retry</string>
+    <string name="core_action_undo">Undo</string>
+    <string name="core_action_ok">OK</string>
+    <string name="core_action_cancel">Cancel</string>
+    <string name="core_action_delete">Delete</string>
+    <string name="core_error_generic">Something went wrong</string>
+</resources>

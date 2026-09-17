@@ -8,9 +8,3 @@ SELECT value FROM keyValueEntry WHERE id = :id;
 
 put:
 INSERT OR REPLACE INTO keyValueEntry(id, value) VALUES (:id, :value);
-
-remove:
-DELETE FROM keyValueEntry WHERE id = :id;
-
-clear:
-DELETE FROM keyValueEntry;

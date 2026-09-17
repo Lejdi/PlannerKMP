@@ -9,8 +9,15 @@ CREATE TABLE taskEntity (
     asap INTEGER NOT NULL DEFAULT 0
 );
 
+-- Ordered explicitly. A bare `SELECT *` returns rows in whatever order the query planner finds
+-- convenient; SQLite usually gives rowid order for a plain table scan, but it does not promise to
+-- and stops doing so after a VACUUM or once an index is chosen. Relying on that meant the list's
+-- order was an accident of the storage engine.
 selectAll:
-SELECT * FROM taskEntity;
+SELECT * FROM taskEntity ORDER BY id;
+
+selectById:
+SELECT * FROM taskEntity WHERE id = :id;
 
 insert:
 INSERT INTO taskEntity(name, description, startDate, endDate, hour, daysInterval, asap)
@@ -19,6 +26,18 @@ VALUES (:name, :description, :startDate, :endDate, :hour, :daysInterval, :asap);
 update:
 UPDATE taskEntity
 SET name = :name, description = :description, startDate = :startDate, endDate = :endDate, hour = :hour, daysInterval = :daysInterval, asap = :asap
+WHERE id = :id;
+
+-- Schedule columns only, deliberately not name/description.
+--
+-- Two writers move a task's schedule without the user having typed anything: the daily cleanup
+-- rolling a periodic task forward, and "mark complete" advancing one occurrence. Both work from a
+-- Task they read earlier, so writing the whole row through `update` made them overwrite a name or
+-- description the user had edited in between with whatever was current when they read it. Nothing
+-- reported the loss, because from SQLite's point of view the write succeeded.
+updateSchedule:
+UPDATE taskEntity
+SET startDate = :startDate, endDate = :endDate, hour = :hour, daysInterval = :daysInterval, asap = :asap
 WHERE id = :id;
 
 deleteById:

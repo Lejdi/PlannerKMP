@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Checkout and artifact upload need nothing else. Without this block the job inherits whatever the
+# repository default is, which on older repositories is read/write.
+permissions:
+  contents: read
+
+jobs:
+  # Its own job, so a style finding no longer hides whether the tests pass. detekt used to be the
+  # first step of the single job, and everything after a failing step is skipped.
+  static-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # The module dependency rules — feature -> core and never the reverse, core:* seeing only
+      # core:common, core:testing never shipping — used to live only in CLAUDE.md and in build-script
+      # comments. Run before detekt because a layering break is a worse thing to learn about late
+      # than an import order.
+      - name: Architecture rules
+        run: ./gradlew architectureCheck
+
+      - name: Static analysis
+        run: ./gradlew detekt
+
+      # The test-report upload below does not cover these: detekt writes to build/reports/detekt/,
+      # and when it fails it is the only thing that has run, so the console was the only record.
+      - name: Upload detekt reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detekt-reports
+          path: '**/build/reports/detekt/**'
+
+  build:
+    # macOS so the iOS targets can be compiled: half of this codebase is only built by them.
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: JVM unit tests
+        run: ./gradlew testAndroidHostTest
+
+      - name: Android debug build
+        run: ./gradlew :androidApp:assembleDebug
+
+      # R8 runs only in release. Building debug alone meant the shrinker, the resource shrinker and
+      # every keep rule were first exercised on whoever cut the release — the one build where a
+      # missing rule shows up as a crash rather than a compile error. Unsigned is fine: signing is
+      # not what this is testing.
+      - name: Android release build (runs R8)
+        run: ./gradlew :androidApp:assembleRelease
+
+      # Compose resources are packaged as assets, and the modules that own them have to opt into
+      # Android resource processing. Nothing else here can catch that: the build succeeds, the tests
+      # do not render, and the app then throws on the first stringResource() it reaches.
+      - name: Assert Compose resources are packaged
+        run: |
+          apk=androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk
+          for module in core.ui feature.tasks feature.grocery; do
+            entry="assets/composeResources/pl.lejdi.plannerkmp.$module.resources/"
+            if ! unzip -l "$apk" | grep -q "$entry"; then
+              echo "::error::$entry is missing from the release APK"
+              exit 1
+            fi
+          done
+
+      # Both iOS targets. The simulator one alone left the binary that actually ships — iosArm64 —
+      # compiled by no configuration at all, which is the same argument the release build above
+      # makes for R8.
+      - name: iOS compilation (device and simulator)
+        run: ./gradlew compileKotlinIosArm64 compileKotlinIosSimulatorArm64
+
+      # Linking is a separate failure mode from compiling: a name collision in the generated
+      # Objective-C header, or a missing export, shows up here and nowhere earlier.
+      - name: iOS framework link
+        run: ./gradlew :shared:linkReleaseFrameworkIosArm64
+
+      # Turns "Xcode does not support simulator tests" into an obvious diagnosis when a runner image
+      # ships without a runtime, instead of a confusing Gradle failure.
+      - name: List simulator runtimes
+        run: xcrun simctl list runtimes
+
+      - name: iOS unit tests
+        run: ./gradlew iosSimulatorArm64Test
+
+      # Builds the Swift entry point, the framework embedding and Config.xcconfig, none of which any
+      # Gradle task touches.
+      - name: iOS app build
+        run: |
+          xcodebuild \
+            -project iosApp/iosApp.xcodeproj \
+            -scheme iosApp \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ios \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          # Both: the HTML is for reading, the XML in test-results/ is what a summary action or an
+          # annotation can actually consume.
+          path: |
+            **/build/reports/tests/**
+            **/build/test-results/**
+
+      # Without the mapping file a release stack trace cannot be deobfuscated at all, and the build
+      # that produced it is gone.
+      - name: Upload R8 mapping
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-mapping
+          path: androidApp/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error

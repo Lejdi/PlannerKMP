@@ -1,0 +1,84 @@
+# Only the rules this project wants enforced differently; everything else keeps detekt's defaults.
+build:
+  maxIssues: 0
+
+complexity:
+  LongMethod:
+    active: true
+    threshold: 80
+    # A composable is a declarative tree, not a procedure; its length is layout, not complexity.
+    ignoreAnnotated: ['Composable']
+  LongParameterList:
+    active: true
+    functionThreshold: 9
+    constructorThreshold: 9
+    ignoreDefaultParameters: true
+    # Composables legitimately take many parameters — that is state hoisting, not a smell.
+    ignoreAnnotated: ['Composable']
+  TooManyFunctions:
+    active: true
+    # Tightened from 20/25. With ignorePrivate on top, the old thresholds put the rule out of reach
+    # of anything in this codebase, so it was enabled but could not fire.
+    thresholdInClasses: 12
+    thresholdInFiles: 14
+    ignorePrivate: true
+  CyclomaticComplexMethod:
+    active: true
+    threshold: 15
+
+style:
+  UnusedPrivateMember:
+    # A @Preview function is called by the tooling, never from code, so "unused" is what a correct
+    # one looks like. Previews are private on purpose — they are not API.
+    ignoreAnnotated: ['Preview']
+  MagicNumber:
+    active: false
+  ReturnCount:
+    active: true
+    max: 6
+  MaxLineLength:
+    active: true
+    maxLineLength: 120
+  ForbiddenComment:
+    active: false
+
+naming:
+  MatchingDeclarationName:
+    # KMP names platform files Foo.android.kt / Foo.ios.kt, which this rule cannot express.
+    active: false
+  FunctionNaming:
+    # Composables are PascalCase by convention.
+    ignoreAnnotated: ['Composable']
+
+exceptions:
+  TooGenericExceptionCaught:
+    # safeQuery/safeRequest/asAppResult exist precisely to catch whatever a driver throws and map it,
+    # and runStartupWork catches so a feature's startup work cannot take the app down. Excluded by
+    # path rather than disabled outright: switching the rule off project-wide also excused every
+    # future `catch (e: Exception)` written anywhere else, which is the opposite of the intent.
+    active: true
+    excludes:
+      - '**/SafeQuery.kt'
+      - '**/SafeRequest.kt'
+      - '**/Koin.kt'
+  SwallowedException:
+    # This was disabled with no rationale at all, under a comment that justified only the rule
+    # above it — and it is the single rule that would catch a regression of this codebase's most
+    # emphatic invariant: that a throwable turned into a value is logged on the way. The three
+    # funnels all log before mapping, so they do not trip it; the next hand-written catch that
+    # forgets to is exactly what it is for.
+    active: true
+    excludes:
+      - '**/RestorableViewModel.kt'
+
+formatting:
+  Filename:
+    # KMP names an `actual` file Foo.android.kt / Foo.ios.kt, so the file holding
+    # AndroidDatabaseDriverFactory is DatabaseDriverFactory.android.kt on purpose. Same reason
+    # naming:MatchingDeclarationName is off above.
+    active: false
+
+empty-blocks:
+  EmptyFunctionBlock:
+    active: true
+    ignoreOverridden: true

@@ -1,0 +1,20 @@
+<resources>
+    <string name="grocery_tab_title">Grocery</string>
+
+    <string name="grocery_add_item">Add product</string>
+    <string name="grocery_complete_item">Bought</string>
+    <string name="grocery_edit_item">Edit product</string>
+    <string name="grocery_item_completed">Removed from your list</string>
+    <string name="grocery_empty_list">Your grocery list is empty</string>
+
+    <string name="grocery_field_name">Product</string>
+    <string name="grocery_field_description">Note</string>
+
+    <string name="grocery_action_confirm">Confirm</string>
+
+    <string name="grocery_error_load_failed">Could not load your grocery list</string>
+    <string name="grocery_error_save_failed">Could not save this product</string>
+    <string name="grocery_error_item_gone">This item no longer exists</string>
+    <string name="grocery_error_delete_failed">Could not remove this product</string>
+    <string name="grocery_error_name_blank">Enter a product name</string>
+</resources>

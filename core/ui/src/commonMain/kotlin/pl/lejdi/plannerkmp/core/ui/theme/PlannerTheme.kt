@@ -24,6 +24,9 @@ fun PlannerTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
+        // Passed explicitly: with only a colorScheme here, every screen that wanted emphasis
+        // re-derived it from LocalTextStyle by hand, so the type scale lived in the screens.
+        typography = plannerTypography,
         content = content,
     )
 }
