@@ -108,6 +108,7 @@ kotlin {
             implementation(project(":core:navigation"))
             implementation(project(":feature:tasks"))
             implementation(project(":feature:grocery"))
+            implementation(project(":feature:routines"))
             implementation(libs.koin.compose)
             // App() renders each feature's contributed tab title, which is a StringResource.
             implementation(libs.compose.components.resources)

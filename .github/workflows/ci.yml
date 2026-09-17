@@ -87,7 +87,7 @@ jobs:
       - name: Assert Compose resources are packaged
         run: |
           apk=androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk
-          for module in core.ui feature.tasks feature.grocery; do
+          for module in core.ui feature.tasks feature.grocery feature.routines; do
             entry="assets/composeResources/pl.lejdi.plannerkmp.$module.resources/"
             if ! unzip -l "$apk" | grep -q "$entry"; then
               echo "::error::$entry is missing from the release APK"

@@ -22,6 +22,10 @@ import pl.lejdi.plannerkmp.core.testing.CloseTrackingSqlDriver
 import pl.lejdi.plannerkmp.core.testing.inMemorySqlDriver
 import pl.lejdi.plannerkmp.feature.grocery.domain.GroceryDatasource
 import pl.lejdi.plannerkmp.feature.grocery.ui.GroceryListViewModel
+import pl.lejdi.plannerkmp.feature.routines.domain.ObserveRoutinesForToday
+import pl.lejdi.plannerkmp.feature.routines.domain.RoutinesDatasource
+import pl.lejdi.plannerkmp.feature.routines.domain.ToggleRoutineDone
+import pl.lejdi.plannerkmp.feature.routines.ui.RoutinesViewModel
 import pl.lejdi.plannerkmp.feature.tasks.domain.CleanupDateStore
 import pl.lejdi.plannerkmp.feature.tasks.domain.MarkTaskComplete
 import pl.lejdi.plannerkmp.feature.tasks.domain.ObserveTasksForDashboard
@@ -93,6 +97,7 @@ class AppDependencyGraphTest {
         // plain get() has no CreationExtras, so the test passes one the same way Koin would.
         koin.get<DashboardViewModel> { parametersOf(SavedStateHandle()) }
         koin.get<GroceryListViewModel> { parametersOf(SavedStateHandle()) }
+        koin.get<RoutinesViewModel> { parametersOf(SavedStateHandle()) }
         // Both the "add" and the "edit" entry points, since the id is an injected parameter.
         koin.get<TaskEditViewModel> { parametersOf(null, SavedStateHandle()) }
         koin.get<TaskEditViewModel> { parametersOf(1L, SavedStateHandle()) }
@@ -145,6 +150,9 @@ class AppDependencyGraphTest {
         assertTrue(koin.get<TasksDatasource>() is TasksDatasource)
         assertTrue(koin.get<CleanupDateStore>() is CleanupDateStore)
         assertTrue(koin.get<GroceryDatasource>() is GroceryDatasource)
+        assertTrue(koin.get<RoutinesDatasource>() is RoutinesDatasource)
+        koin.get<ObserveRoutinesForToday>()
+        koin.get<ToggleRoutineDone>()
         koin.get<ObserveTasksForDashboard>()
         koin.get<UpdateTasksDates>()
         koin.get<MarkTaskComplete>()
@@ -168,9 +176,17 @@ class AppDependencyGraphTest {
         // Touch the ports so the lazily-created drivers actually exist.
         application.koin.get<TasksDatasource>()
         application.koin.get<GroceryDatasource>()
+        application.koin.get<RoutinesDatasource>()
         application.koin.get<CleanupDateStore>()
         val opened = drivers.toList()
-        assertEquals(3, opened.size, "one driver per database: tasks, grocery, key-value; got ${opened.size}")
+        // Every port is touched explicitly because Koin's singles are lazy: a database whose port
+        // nothing here resolves is never opened, so it is not that this assertion *fails* for a new
+        // feature — it quietly stops covering one, and that feature's `onClose` ships untested.
+        assertEquals(
+            4,
+            opened.size,
+            "one driver per database: tasks, grocery, routines, key-value; got ${opened.size}",
+        )
         assertTrue(opened.none { it.closed }, "nothing is closed before the graph is")
 
         application.close()

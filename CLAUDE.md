@@ -16,7 +16,8 @@ The data layer is reactive — datasources expose `Flow<AppResult<T>>` over
 SQLDelight query flows, so a write re-emits to every observer and no screen
 re-queries on entry.
 
-Two features: `:feature:tasks` (tasks/TODOs) and `:feature:grocery` (grocery list).
+Three features: `:feature:tasks` (tasks/TODOs), `:feature:grocery` (grocery list) and
+`:feature:routines` (daily routines).
 
 ## Commands
 
@@ -31,7 +32,7 @@ Use the Gradle wrapper from the repo root (`./gradlew`).
 | A single test class | append `--tests "pl.lejdi.plannerkmp.core.mvi.BaseViewModelTest"` |
 | Static analysis | `./gradlew detekt` (add `--auto-correct` to fix formatting) |
 | Architecture rules | `./gradlew architectureCheck` |
-| Export a SQLDelight schema after editing a `.sq` | `./gradlew generateCommonMainTasksDatabaseSchema` (and the `...GroceryDatabaseSchema` / `...KeyValueDatabaseSchema` equivalents) |
+| Export a SQLDelight schema after editing a `.sq` | `./gradlew generateCommonMainTasksDatabaseSchema` (and the `...GroceryDatabaseSchema` / `...RoutinesDatabaseSchema` / `...KeyValueDatabaseSchema` equivalents) |
 
 Run the iOS app from Xcode (`iosApp/iosApp.xcodeproj`), not via Gradle.
 
@@ -192,6 +193,20 @@ Modules, declared in `settings.gradle.kts`:
   (inline-expand add/edit rows driven by one `GroceryEditor` in the state). Completing an
   item is a permanent delete, paired with an **Undo** offer lasting exactly as long as the
   snackbar carrying it. Editing is a visible button as well as a long press.
+- **`:feature:routines`** — `Routine`/`RoutineDraft`/`TodayRoutine`/`RoutineField`, the
+  `RoutinesDatasource` port and its own `routineEntity` schema. A routine is a daily habit with a
+  name and an optional note, ticked off for today and only for today: there is no way to see another
+  day, and at local midnight everything comes back un-ticked. **That reset is derived, not stored** —
+  the row holds `completedOn`, the last date it was ticked, and `ObserveRoutinesForToday` combines
+  the query flow with `todayFlow()` so "done" means `completedOn == today` as evaluated right now.
+  Hence no cleanup initializer and no history table: nothing has to run overnight for the screen to
+  be right in the morning, and the app can be shut for a week without drifting.
+  `ToggleRoutineDone` holds the write half of that convention (today's date, or `null`). Writes come
+  in two shapes for the same reason `:feature:tasks` splits `editTask` from `rescheduleTask`:
+  `updateDetails` writes the text columns and `updateCompletedOn` writes that one column, so a
+  rename cannot un-tick a routine and a tick cannot revert a rename. Deleting is behind a
+  confirmation dialog rather than grocery's undo-snackbar — it is rare and deliberate here, not a
+  tap made forty times a trip.
 
 ### Rules
 
