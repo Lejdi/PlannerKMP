@@ -132,7 +132,21 @@ val moduleDependencyRules: Map<String, List<String>> = buildMap {
 val verifyModuleDependencies by tasks.registering(VerifyModuleDependencies::class) {
     group = "verification"
     description = "Fails when a module declares a project dependency the architecture does not allow."
-    buildScripts.from(moduleDependencyRules.keys.map { file("${it.drop(1).replace(':', '/')}/build.gradle.kts") })
+    // Discovered from disk, not from the allowlist's own keys.
+    //
+    // Deriving the file list from `moduleDependencyRules.keys` meant this task only ever scanned
+    // modules the allowlist already named — so a *new* module, which is the one case an allowlist
+    // exists to catch, was not scanned at all and went silently unconstrained. The `permitted ==
+    // null` branch below could never fire, and the rule stated in CLAUDE.md ("a new module needs an
+    // entry there or the task fails") was not true of the code. Reading the directory is still not
+    // reaching into another project's configuration, so isolated projects is unaffected.
+    buildScripts.from(
+        fileTree(rootDir) {
+            // The root build script is not a module and has no dependencies block of its own.
+            include("*/build.gradle.kts", "*/*/build.gradle.kts")
+            exclude("build/**", "*/build/**", "*/*/build/**", ".claude/**", ".gradle/**")
+        },
+    )
     allowedProductionDependencies.set(moduleDependencyRules)
     // Nothing ships it, so a production dependency on it would put fakes in the release binary.
     testOnlyModules.set(setOf(":core:testing"))

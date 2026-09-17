@@ -241,8 +241,11 @@ which it therefore takes as a parameter. The exception is the generic action voc
 `:core:ui` and `:core:navigation` see nothing. `:core:testing` may reach several, because it
 provides their fakes, and is test-only everywhere. **This is enforced** by the allowlist in
 the root `build.gradle.kts` (`./gradlew architectureCheck`), which reads the build scripts as
-text — a new module needs an entry there or the task fails. A type appearing in a module's
-public signature is declared with `api(...)`, not `implementation(...)`.
+text — a new module needs an entry there or the task fails. That last clause was untrue until
+`:feature:routines` was added: the task took its file list from the allowlist's own keys, so an
+unlisted module was never scanned and went silently unconstrained, which is the one failure an
+allowlist exists to prevent. It now discovers the build scripts from disk. A type appearing in a
+module's public signature is declared with `api(...)`, not `implementation(...)`.
 
 **Tests**: anything not platform-specific lives in `commonTest`, so it runs on the JVM host
 *and* on iOS — including the datasource, key-value cache and DI graph tests.
