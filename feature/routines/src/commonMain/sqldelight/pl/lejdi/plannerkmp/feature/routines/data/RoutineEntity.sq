@@ -1,0 +1,35 @@
+-- completedOn is the last date this routine was ticked, not a boolean and not a row per day.
+-- "Done today" is therefore `completedOn == today`, evaluated against a live clock in
+-- ObserveRoutinesForToday rather than read out of storage — which is what makes the daily reset
+-- free: nothing has to run overnight for this screen to be right in the morning, and no table
+-- grows without bound.
+CREATE TABLE routineEntity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    completedOn TEXT AS kotlinx.datetime.LocalDate
+);
+
+-- Ordered explicitly: nothing sorts this list downstream, so without an ORDER BY the order the
+-- user sees is whatever the query planner returns, which SQL does not guarantee is stable.
+selectAll:
+SELECT * FROM routineEntity ORDER BY id;
+
+insert:
+INSERT INTO routineEntity(name, description) VALUES (:name, :description);
+
+-- The text columns only, deliberately not completedOn.
+--
+-- Two writers touch a routine, and neither has read what the other wrote: the editor saves the
+-- name the user typed, and the checkbox moves completedOn. Writing the whole row from either one
+-- means pushing a stale value of the other's column — a rename un-ticking today, or a tick
+-- reverting a rename — and SQLite reports both as success. This is the same split
+-- :feature:tasks makes between `update` and `updateSchedule`, for the same reason.
+updateDetails:
+UPDATE routineEntity SET name = :name, description = :description WHERE id = :id;
+
+updateCompletedOn:
+UPDATE routineEntity SET completedOn = :completedOn WHERE id = :id;
+
+deleteById:
+DELETE FROM routineEntity WHERE id = :id;

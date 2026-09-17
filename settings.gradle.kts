@@ -41,3 +41,4 @@ include(":core:testing")
 
 include(":feature:grocery")
 include(":feature:tasks")
+include(":feature:routines")
