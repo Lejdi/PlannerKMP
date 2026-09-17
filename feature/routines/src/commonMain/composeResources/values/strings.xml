@@ -1,3 +1,24 @@
 <resources>
     <string name="routines_tab_title">Routines</string>
+
+    <string name="routines_add_routine">Add routine</string>
+    <string name="routines_edit_routine">Edit routine</string>
+    <string name="routines_delete_routine">Delete routine</string>
+    <string name="routines_mark_done">Done today</string>
+    <string name="routines_empty_list">No daily routines yet</string>
+
+    <string name="routines_field_name">Routine</string>
+    <string name="routines_field_description">Note</string>
+
+    <string name="routines_action_confirm">Confirm</string>
+
+    <string name="routines_delete_title">Delete this routine?</string>
+    <string name="routines_delete_message">It will be gone for good, along with today\'s tick.</string>
+
+    <string name="routines_error_load_failed">Could not load your routines</string>
+    <string name="routines_error_save_failed">Could not save this routine</string>
+    <string name="routines_error_routine_gone">This routine no longer exists</string>
+    <string name="routines_error_delete_failed">Could not delete this routine</string>
+    <string name="routines_error_toggle_failed">Could not update this routine</string>
+    <string name="routines_error_name_blank">Enter a routine name</string>
 </resources>
