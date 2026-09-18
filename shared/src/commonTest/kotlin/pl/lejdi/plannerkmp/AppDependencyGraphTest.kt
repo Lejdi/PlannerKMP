@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlSchema
+import kotlinx.datetime.DayOfWeek
 import org.koin.core.Koin
 import org.koin.core.KoinApplication
 import org.koin.core.parameter.parametersOf
@@ -22,6 +23,11 @@ import pl.lejdi.plannerkmp.core.testing.CloseTrackingSqlDriver
 import pl.lejdi.plannerkmp.core.testing.inMemorySqlDriver
 import pl.lejdi.plannerkmp.feature.grocery.domain.GroceryDatasource
 import pl.lejdi.plannerkmp.feature.grocery.ui.GroceryListViewModel
+import pl.lejdi.plannerkmp.feature.gym.domain.GymDatasource
+import pl.lejdi.plannerkmp.feature.gym.domain.ObserveGymWeek
+import pl.lejdi.plannerkmp.feature.gym.domain.ToggleExerciseSet
+import pl.lejdi.plannerkmp.feature.gym.ui.GymExerciseEditViewModel
+import pl.lejdi.plannerkmp.feature.gym.ui.GymViewModel
 import pl.lejdi.plannerkmp.feature.routines.domain.ObserveRoutinesForToday
 import pl.lejdi.plannerkmp.feature.routines.domain.RoutinesDatasource
 import pl.lejdi.plannerkmp.feature.routines.domain.ToggleRoutineDone
@@ -101,6 +107,13 @@ class AppDependencyGraphTest {
         // Both the "add" and the "edit" entry points, since the id is an injected parameter.
         koin.get<TaskEditViewModel> { parametersOf(null, SavedStateHandle()) }
         koin.get<TaskEditViewModel> { parametersOf(1L, SavedStateHandle()) }
+        koin.get<GymViewModel> { parametersOf(SavedStateHandle()) }
+        // Both gym entry points too, and they are the reason this assertion earns its keep: that
+        // definition destructures *two* injected parameters and both are nullable — an add has no
+        // exercise id, an edit has no weekday to seed — so Koin cannot match either by type and a
+        // wrong parameter order would only surface when a user opened the form.
+        koin.get<GymExerciseEditViewModel> { parametersOf(null, DayOfWeek.MONDAY, SavedStateHandle()) }
+        koin.get<GymExerciseEditViewModel> { parametersOf(1L, null, SavedStateHandle()) }
     }
 
     @Test
@@ -151,6 +164,9 @@ class AppDependencyGraphTest {
         assertTrue(koin.get<CleanupDateStore>() is CleanupDateStore)
         assertTrue(koin.get<GroceryDatasource>() is GroceryDatasource)
         assertTrue(koin.get<RoutinesDatasource>() is RoutinesDatasource)
+        assertTrue(koin.get<GymDatasource>() is GymDatasource)
+        koin.get<ObserveGymWeek>()
+        koin.get<ToggleExerciseSet>()
         koin.get<ObserveRoutinesForToday>()
         koin.get<ToggleRoutineDone>()
         koin.get<ObserveTasksForDashboard>()
@@ -177,15 +193,16 @@ class AppDependencyGraphTest {
         application.koin.get<TasksDatasource>()
         application.koin.get<GroceryDatasource>()
         application.koin.get<RoutinesDatasource>()
+        application.koin.get<GymDatasource>()
         application.koin.get<CleanupDateStore>()
         val opened = drivers.toList()
         // Every port is touched explicitly because Koin's singles are lazy: a database whose port
         // nothing here resolves is never opened, so it is not that this assertion *fails* for a new
         // feature — it quietly stops covering one, and that feature's `onClose` ships untested.
         assertEquals(
-            4,
+            5,
             opened.size,
-            "one driver per database: tasks, grocery, routines, key-value; got ${opened.size}",
+            "one driver per database: tasks, grocery, routines, gym, key-value; got ${opened.size}",
         )
         assertTrue(opened.none { it.closed }, "nothing is closed before the graph is")
 
