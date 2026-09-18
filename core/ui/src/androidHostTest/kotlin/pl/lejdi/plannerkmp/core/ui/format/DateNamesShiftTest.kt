@@ -7,6 +7,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * The off-by-one the common tests cannot see.
@@ -45,6 +46,35 @@ class DateNamesShiftTest {
         assertEquals("Saturday", DayOfWeek.SATURDAY.displayName())
         // The wrap-around: ISO 7 has to land on index 1, not index 8.
         assertEquals("Sunday", DayOfWeek.SUNDAY.displayName())
+    }
+
+    /** The same wrap-around, in the short array, which is indexed identically. */
+    @Test
+    fun everyWeekdayResolvesToItsOwnShortName() {
+        assertEquals("Mon", DayOfWeek.MONDAY.shortDisplayName())
+        assertEquals("Tue", DayOfWeek.TUESDAY.shortDisplayName())
+        assertEquals("Wed", DayOfWeek.WEDNESDAY.shortDisplayName())
+        assertEquals("Thu", DayOfWeek.THURSDAY.shortDisplayName())
+        assertEquals("Fri", DayOfWeek.FRIDAY.shortDisplayName())
+        assertEquals("Sat", DayOfWeek.SATURDAY.shortDisplayName())
+        assertEquals("Sun", DayOfWeek.SUNDAY.shortDisplayName())
+    }
+
+    /**
+     * The property the peek row actually depends on, asserted rather than the exact abbreviations:
+     * the platform owns those, and pinning "Mon" for every language is what this module exists to
+     * avoid.
+     */
+    @Test
+    fun everyShortWeekdayNameIsNonBlankAndNoLongerThanTheFullOne() {
+        DayOfWeek.entries.forEach { weekday ->
+            val short = weekday.shortDisplayName()
+            assertTrue(short.isNotBlank(), "$weekday has no short name")
+            assertTrue(
+                short.length <= weekday.displayName().length,
+                "$weekday's short name '$short' is longer than '${weekday.displayName()}'",
+            )
+        }
     }
 
     @Test

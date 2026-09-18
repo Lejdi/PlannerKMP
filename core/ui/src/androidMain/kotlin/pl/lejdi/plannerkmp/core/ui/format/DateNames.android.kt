@@ -24,28 +24,38 @@ import java.util.Locale
  * the two want the format form in exactly that position — Polish "17 września", not "17 wrzesień".
  */
 private object Symbols {
+
+    /** The three arrays one locale bundle yields, so a lookup cannot return a mismatched pair. */
+    class Names(
+        val months: Array<String>,
+        val weekdays: Array<String>,
+        val shortWeekdays: Array<String>,
+    )
+
     private var locale: Locale? = null
-    private var months: Array<String> = emptyArray()
-    private var weekdays: Array<String> = emptyArray()
+    private var names: Names = Names(emptyArray(), emptyArray(), emptyArray())
 
     /**
      * Rebuilt only when the device language changes: constructing `DateFormatSymbols` loads a
      * locale bundle, and these are read once per visible day cell on every recomposition.
      */
     @Synchronized
-    fun of(current: Locale): Pair<Array<String>, Array<String>> {
+    fun of(current: Locale): Names {
         if (current != locale) {
             val symbols = DateFormatSymbols.getInstance(current)
-            months = symbols.months
-            weekdays = symbols.weekdays
+            names = Names(
+                months = symbols.months,
+                weekdays = symbols.weekdays,
+                shortWeekdays = symbols.shortWeekdays,
+            )
             locale = current
         }
-        return months to weekdays
+        return names
     }
 }
 
 /** `getMonths()` is 0-based, January first, with a trailing empty slot for a 13th month. */
-actual fun Month.displayName(): String = Symbols.of(Locale.getDefault()).first[number - 1]
+actual fun Month.displayName(): String = Symbols.of(Locale.getDefault()).months[number - 1]
 
 /**
  * `getWeekdays()` is a 1-based, Sunday-first array of length 8 (index 0 unused), following
@@ -53,4 +63,17 @@ actual fun Month.displayName(): String = Symbols.of(Locale.getDefault()).first[n
  * wraps round to the front.
  */
 actual fun DayOfWeek.displayName(): String =
-    Symbols.of(Locale.getDefault()).second[isoDayNumber % 7 + 1]
+    Symbols.of(Locale.getDefault()).weekdays[weekdayIndex]
+
+/** `getShortWeekdays()` is laid out exactly like `getWeekdays()`, so the index is the same. */
+actual fun DayOfWeek.shortDisplayName(): String =
+    Symbols.of(Locale.getDefault()).shortWeekdays[weekdayIndex]
+
+/**
+ * The one place the Sunday-first wrap-around is written down on this platform.
+ *
+ * It used to be spelled out at the single call site that needed it; a second reader of the same
+ * arrays is exactly how an off-by-one gets copied with a typo, which is what
+ * `DateNamesShiftTest` exists to catch.
+ */
+private val DayOfWeek.weekdayIndex: Int get() = isoDayNumber % 7 + 1

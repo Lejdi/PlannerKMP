@@ -26,6 +26,17 @@ expect fun Month.displayName(): String
 expect fun DayOfWeek.displayName(): String
 
 /**
+ * The weekday's abbreviated name, e.g. "Mon" / "pon" — for a chip or a column header, where the
+ * full name does not fit.
+ *
+ * Deliberately not `displayName().take(3)`. That happens to work in English and Polish and is
+ * wrong elsewhere: the abbreviation is not always a prefix, and in the languages that write the
+ * weekday in a non-Latin script it is not always three characters either. Both platforms already
+ * ship these names, for the same reason they ship the full ones.
+ */
+expect fun DayOfWeek.shortDisplayName(): String
+
+/**
  * Numeric formats, which need no translation and so stay here rather than in platform code.
  *
  * `dd-mm-yyyy` and `hh:mm` are what the edit form's tap-to-open fields show.
