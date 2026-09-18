@@ -9,6 +9,7 @@ import pl.lejdi.plannerkmp.core.ui.theme.PlannerTheme
 import pl.lejdi.plannerkmp.feature.gym.domain.DayExercise
 import pl.lejdi.plannerkmp.feature.gym.domain.GymDay
 import pl.lejdi.plannerkmp.feature.gym.domain.GymExercise
+import pl.lejdi.plannerkmp.feature.gym.domain.GymField
 
 private val TODAY = LocalDate(2026, 9, 18)
 private val TODAY_WEEKDAY = DayOfWeek.FRIDAY
@@ -171,6 +172,84 @@ private fun GymOtherWeekdayPreview() = PlannerTheme {
         isToday = false,
         isWeekEmpty = false,
         state = state(week(listOf(BENCH))),
+        onEvent = {},
+    )
+}
+
+// ---- The edit form ----
+
+private val SEEDED_FORM = GymExerciseForm(
+    name = "Bench press",
+    comment = "slow eccentric",
+    dayOfWeek = DayOfWeek.MONDAY,
+    setsCount = "4",
+    repsPerSet = "8",
+    weight = "60",
+)
+
+/** An empty add form, on the weekday the FAB was pressed on. */
+@Preview(name = "Gym form - add")
+@Composable
+private fun GymFormAddPreview() = PlannerTheme {
+    GymExerciseEditContent(
+        state = GymExerciseEditState(form = GymExerciseForm(dayOfWeek = TODAY_WEEKDAY)),
+        snackbarHostState = SnackbarHostState(),
+        onEvent = {},
+    )
+}
+
+/** An existing exercise: Delete appears, and the weight reads 60 rather than 60.0. */
+@Preview(name = "Gym form - edit")
+@Composable
+private fun GymFormEditPreview() = PlannerTheme {
+    GymExerciseEditContent(
+        state = GymExerciseEditState(exerciseId = 1L, isFormSeeded = true, form = SEEDED_FORM),
+        snackbarHostState = SnackbarHostState(),
+        onEvent = {},
+    )
+}
+
+/** Every field marked from one Save — a state a validator stopping at the first could not reach. */
+@Preview(name = "Gym form - invalid fields")
+@Composable
+private fun GymFormInvalidPreview() = PlannerTheme {
+    GymExerciseEditContent(
+        state = GymExerciseEditState(
+            form = GymExerciseForm(
+                name = "",
+                setsCount = "0",
+                repsPerSet = "abc",
+                weight = "heavy",
+                invalidFields = setOf(GymField.Name, GymField.Sets, GymField.Reps, GymField.Weight),
+            ),
+        ),
+        snackbarHostState = SnackbarHostState(),
+        onEvent = {},
+    )
+}
+
+/** The confirmation, which is all that stands between a tap and a deleted plan entry. */
+@Preview(name = "Gym form - confirm delete")
+@Composable
+private fun GymFormConfirmDeletePreview() = PlannerTheme {
+    GymExerciseEditContent(
+        state = GymExerciseEditState(
+            exerciseId = 1L,
+            isFormSeeded = true,
+            form = SEEDED_FORM.copy(activeDialog = GymExerciseEditDialog.ConfirmDelete),
+        ),
+        snackbarHostState = SnackbarHostState(),
+        onEvent = {},
+    )
+}
+
+/** A form that never loaded: full screen and a retry, and no live fields to save from. */
+@Preview(name = "Gym form - load failed")
+@Composable
+private fun GymFormLoadFailedPreview() = PlannerTheme {
+    GymExerciseEditContent(
+        state = GymExerciseEditState(exerciseId = 1L, loadFailed = true),
+        snackbarHostState = SnackbarHostState(),
         onEvent = {},
     )
 }

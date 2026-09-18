@@ -27,6 +27,7 @@
     <string name="gym_form_name">Exercise</string>
     <string name="gym_form_comment">Note</string>
     <string name="gym_form_weekday">Day</string>
+    <string name="gym_form_pick_day">Move to %1$s</string>
     <string name="gym_form_sets">Series</string>
     <string name="gym_form_reps">Reps per serie</string>
     <string name="gym_form_weight">Weight (kg)</string>
