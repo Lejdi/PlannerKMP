@@ -58,6 +58,7 @@ class GymViewModel(
                 // on looking wrong while the user is fixing it.
                 copy(weightEditor = weightEditor?.copy(text = event.text, isInvalid = false))
             }
+            is GymEvent.WeightEditorFocusChanged -> onWeightEditorFocusChanged(event.isFocused)
             is GymEvent.WeightEditCommitted -> commitWeightEdit()
             is GymEvent.WeightEditCancelled -> setState { copy(weightEditor = null) }
             is GymEvent.EditExerciseClicked ->
@@ -115,6 +116,26 @@ class GymViewModel(
                     text = exercise.exercise.weight.toWeightText(),
                 ),
             )
+        }
+    }
+
+    /**
+     * Turns a focus change into either "the user is editing" or "the user has left the field".
+     *
+     * The second only follows from a loss of focus the field actually *had*: `onFocusChanged`
+     * reports unfocused once when the field is attached, before anything could have focused it, and
+     * treating that as a departure committed and closed the editor on the frame it opened — which
+     * is what a field that "instantly unfocuses itself" looks like from outside.
+     *
+     * This lives here rather than in the composable because it is a rule, and a rule inside a
+     * composable is one no test in this project can reach.
+     */
+    private fun onWeightEditorFocusChanged(isFocused: Boolean) {
+        val editor = state.value.weightEditor ?: return
+        if (isFocused) {
+            setState { copy(weightEditor = editor.copy(hasBeenFocused = true)) }
+        } else if (editor.hasBeenFocused) {
+            commitWeightEdit()
         }
     }
 

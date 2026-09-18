@@ -238,6 +238,69 @@ class GymViewModelTest {
         assertEquals("", viewModel.state.value.weightEditor?.text)
     }
 
+    /**
+     * The regression this exists for.
+     *
+     * `Modifier.onFocusChanged` fires once when the field is attached, reporting *unfocused* —
+     * before the user can have touched anything. Treating that like "the user tapped away"
+     * committed and closed the editor on the frame it opened, which on screen looked exactly like
+     * a field refusing to take focus.
+     */
+    @Test
+    fun theUnfocusedEventAFieldGetsOnOpeningIsIgnored() = runTest {
+        val datasource = FakeGymDatasource(listOf(bench))
+        val viewModel = viewModel(datasource)
+        runCurrent()
+
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditorFocusChanged(isFocused = false))
+        runCurrent()
+
+        assertNotNull(viewModel.state.value.weightEditor, "the editor must survive being attached")
+        assertTrue(datasource.weightWrites().isEmpty(), "and must not have written anything")
+    }
+
+    @Test
+    fun losingFocusAfterHoldingItCommits() = runTest {
+        val datasource = FakeGymDatasource(listOf(bench))
+        val viewModel = viewModel(datasource)
+        runCurrent()
+
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditorFocusChanged(isFocused = true))
+        viewModel.onEvent(GymEvent.WeightTextChanged("82,5"))
+        viewModel.onEvent(GymEvent.WeightEditorFocusChanged(isFocused = false))
+        runCurrent()
+
+        assertEquals(82.5, datasource.weightWrites().single().weight)
+        assertNull(viewModel.state.value.weightEditor, "a committed editor closes")
+    }
+
+    /**
+     * And again after process death: the restored field is attached anew and gets the same
+     * spurious event, so "has held focus" must not come back from saved state as true.
+     */
+    @Test
+    fun aRestoredEditorAlsoIgnoresTheUnfocusedEventOnOpening() = runTest {
+        val savedStateHandle = SavedStateHandle()
+        val datasource = FakeGymDatasource(listOf(bench))
+        val first = viewModel(datasource, savedStateHandle)
+        runCurrent()
+        first.onEvent(GymEvent.WeightEditStarted(1L))
+        first.onEvent(GymEvent.WeightEditorFocusChanged(isFocused = true))
+        first.onEvent(GymEvent.WeightTextChanged("77.5"))
+        runCurrent()
+
+        val restored = viewModel(datasource, savedStateHandle)
+        runCurrent()
+        restored.onEvent(GymEvent.WeightEditorFocusChanged(isFocused = false))
+        runCurrent()
+
+        assertNotNull(restored.state.value.weightEditor, "a restored field has not been focused yet")
+        assertEquals("77.5", restored.state.value.weightEditor?.text)
+        assertTrue(datasource.weightWrites().isEmpty())
+    }
+
     @Test
     fun aTypedWeightIsCommitted() = runTest {
         val datasource = FakeGymDatasource(listOf(bench))

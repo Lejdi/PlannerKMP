@@ -2,6 +2,7 @@ package pl.lejdi.plannerkmp.feature.gym.ui
 
 import kotlinx.datetime.DayOfWeek
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import pl.lejdi.plannerkmp.core.mvi.LoadableState
 import pl.lejdi.plannerkmp.core.mvi.MviEffect
 import pl.lejdi.plannerkmp.core.mvi.MviEvent
@@ -21,6 +22,22 @@ data class WeightEditor(
     val text: String,
     /** Set by a rejected commit, cleared as soon as the user changes the text. */
     val isInvalid: Boolean = false,
+    /**
+     * Whether the field has actually held focus yet, which is what makes "focus was lost" mean
+     * "the user tapped away".
+     *
+     * `Modifier.onFocusChanged` fires once when the field is attached, reporting *unfocused* —
+     * before the user can have touched anything (`FocusChangedNode` starts at `null` and the focus
+     * owner dispatches the current `Inactive` state on attach). Without this flag that event was
+     * indistinguishable from leaving the field, so the editor committed and closed on the frame it
+     * opened, and on screen the field looked like it refused to take focus.
+     *
+     * [Transient] and never restored: a field rebuilt after process death is attached again and
+     * gets the same event again, so coming back as `true` would reproduce the bug on every restore.
+     * It is also not something the user typed, which is the only thing this input carries.
+     */
+    @Transient
+    val hasBeenFocused: Boolean = false,
 )
 
 /**
@@ -111,6 +128,16 @@ sealed interface GymEvent : MviEvent {
 
     data class WeightEditStarted(val exerciseId: Long) : GymEvent
     data class WeightTextChanged(val text: String) : GymEvent
+
+    /**
+     * The field gained or lost focus.
+     *
+     * The screen forwards the fact; what it *means* is decided in the ViewModel, because "lost
+     * focus" only means "the user left the field" once the field has held focus — see
+     * [WeightEditor.hasBeenFocused]. Deciding that in the composable put a rule somewhere no test
+     * could reach it, and the rule was wrong.
+     */
+    data class WeightEditorFocusChanged(val isFocused: Boolean) : GymEvent
     data object WeightEditCommitted : GymEvent
     data object WeightEditCancelled : GymEvent
 

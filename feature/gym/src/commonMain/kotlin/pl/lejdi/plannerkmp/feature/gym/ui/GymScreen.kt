@@ -39,6 +39,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,6 +47,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -463,9 +466,12 @@ private fun ExerciseCard(
  * The weight, and the inline editor it turns into.
  *
  * Tapping it is the whole point of the feature's "make the weight easy to change" requirement: no
- * navigation, no form, type a number and it is written. Committing on the keyboard action *and* on
- * losing focus, because a user who taps elsewhere has finished typing just as much as one who
- * presses Done.
+ * navigation, no form, type a number and it is written.
+ *
+ * **The keyboard's Done action is the way out.** Committing on lost focus is a second path, not the
+ * main one: on a touch screen a tap on empty space or on a card does not move focus — verified on
+ * device — so it fires only when focus genuinely goes somewhere else, such as another row's weight
+ * field. Claiming "tap away to save" here would describe a gesture Android does not deliver.
  */
 @Composable
 private fun WeightControl(
@@ -474,6 +480,11 @@ private fun WeightControl(
     onEvent: (GymEvent) -> Unit,
 ) {
     if (editor != null) {
+        val focusRequester = remember { FocusRequester() }
+        // The editor exists *because* the user tapped the weight, so the field takes focus itself
+        // and raises the keyboard. Without this the tap only swapped a text for an empty-looking
+        // field and the user had to tap again to type — which is not "very easy".
+        LaunchedEffect(editor.exerciseId) { focusRequester.requestFocus() }
         PlainTextField(
             value = editor.text,
             onValueChange = { onEvent(GymEvent.WeightTextChanged(it)) },
@@ -482,7 +493,11 @@ private fun WeightControl(
             isError = editor.isInvalid,
             modifier = Modifier
                 .width(Sizing.intervalFieldWidth)
-                .onFocusChanged { if (!it.isFocused) onEvent(GymEvent.WeightEditCommitted) },
+                .focusRequester(focusRequester)
+                // Forwards the fact only. Whether losing focus means the user left the field is a
+                // rule, and it lives in the ViewModel — see GymViewModel.onWeightEditorFocusChanged
+                // for what went wrong when this composable decided it.
+                .onFocusChanged { onEvent(GymEvent.WeightEditorFocusChanged(it.isFocused)) },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Decimal,
                 imeAction = ImeAction.Done,
