@@ -42,7 +42,7 @@ expect fun DayOfWeek.shortDisplayName(): String
  * `dd-mm-yyyy` and `hh:mm` are what the edit form's tap-to-open fields show.
  */
 private val fieldDateFormat = LocalDate.Format {
-    dayOfMonth()
+    day()
     char('-')
     monthNumber()
     char('-')

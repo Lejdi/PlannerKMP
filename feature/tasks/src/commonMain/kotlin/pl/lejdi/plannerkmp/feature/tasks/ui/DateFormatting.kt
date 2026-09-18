@@ -18,7 +18,7 @@ import pl.lejdi.plannerkmp.feature.tasks.resources.tasks_card_date
  */
 @Composable
 fun LocalDate.toDateLine(): String =
-    stringResource(Res.string.tasks_card_date, dayOfMonth, month.displayName(), year)
+    stringResource(Res.string.tasks_card_date, day, month.displayName(), year)
 
 /**
  * The weekday line beneath it.

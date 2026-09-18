@@ -331,4 +331,4 @@ unsigned when not.
 Kotlin/Android compilation, Java toolchain 21 (Azul) for the Gradle daemon. Android
 `compileSdk`/`targetSdk` 36, `minSdk` 24. Compose Multiplatform 1.11.1, Koin 4.1.1 (pinned per
 artifact, no BOM), SQLDelight 2.3.2, Navigation 3 1.1.1, Ktor 3.5.2, kotlinx.serialization
-1.11.0, kotlinx.coroutines 1.11.0, kotlinx-datetime 0.6.1, detekt 1.23.8.
+1.11.0, kotlinx.coroutines 1.11.0, kotlinx-datetime 0.7.1, detekt 1.23.8.

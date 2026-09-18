@@ -8,3 +8,11 @@ PRODUCT_BUNDLE_IDENTIFIER=pl.lejdi.plannerkmp.PlannerKMP$(TEAM_ID)
 
 // Shared with Gradle - see version.properties at the repo root.
 #include "../../version.properties"
+
+// SQLDelight's native driver reaches sqlite3 through touchlab's sqliter cinterop, whose sqlite3_*
+// symbols are left undefined for whoever links last. `:shared` sets linkerOpts("-lsqlite3") on its
+// binaries, but the framework is `isStatic = true` — a static framework is never linked by
+// Kotlin/Native, so those opts describe a link step that does not happen here and the app target
+// links the archive itself. Without this the app fails to build with "Undefined symbols:
+// _sqlite3_open_v2, _sqlite3_step, ..." at the Planner.debug.dylib link.
+OTHER_LDFLAGS = $(inherited) -lsqlite3

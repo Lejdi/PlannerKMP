@@ -1,10 +1,10 @@
 package pl.lejdi.plannerkmp.core.ui.format
 
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 /**
  * The two conversions Material's date picker needs, in one place and under test.
