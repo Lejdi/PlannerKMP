@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -70,6 +72,15 @@ fun PlainTextField(
     modifier: Modifier = Modifier,
     singleLine: Boolean = true,
     isError: Boolean = false,
+    /**
+     * Defaulted so the text editors that had no opinion keep the keyboard they had.
+     *
+     * A field that takes only digits has to be able to ask for a digit keypad: an inline editor
+     * whose whole reason for existing is "type a number without leaving the list" is not easy if
+     * reaching the number takes two taps on a letter keyboard first.
+     */
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     BasicTextField(
@@ -81,6 +92,8 @@ fun PlainTextField(
         visualTransformation = VisualTransformation.None,
         interactionSource = interactionSource,
         singleLine = singleLine,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
         textStyle = if (isError) textStyle.copy(color = MaterialTheme.colorScheme.error) else textStyle,
     ) { innerTextField ->
         TextFieldDefaults.DecorationBox(

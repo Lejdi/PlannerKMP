@@ -1,0 +1,44 @@
+<resources>
+    <string name="gym_tab_title">Gym</string>
+
+    <string name="gym_add_exercise">Add exercise</string>
+    <string name="gym_edit_exercise">Edit exercise</string>
+    <string name="gym_today">Today</string>
+    <string name="gym_empty_day">Nothing planned for this day</string>
+    <string name="gym_empty_week">No exercises planned yet</string>
+
+    <string name="gym_sets_by_reps">%1$d × %2$d</string>
+    <string name="gym_serie_label">Serie %1$d</string>
+    <string name="gym_weight_unit">kg</string>
+    <string name="gym_no_weight">—</string>
+    <string name="gym_weight_field">Weight in kilograms</string>
+    <string name="gym_weight_hint">kg</string>
+    <string name="gym_day_has_exercises">has exercises</string>
+    <string name="gym_go_to_day">Go to %1$s</string>
+
+    <string name="gym_error_load_failed">Could not load your gym plan</string>
+    <string name="gym_error_toggle_failed">Could not update this exercise</string>
+    <string name="gym_error_weight_save_failed">Could not save the weight</string>
+    <string name="gym_error_weight_invalid">Enter a weight between 0 and 1000</string>
+    <string name="gym_error_exercise_gone">This exercise no longer exists</string>
+
+    <string name="gym_form_title_add">New exercise</string>
+    <string name="gym_form_title_edit">Edit exercise</string>
+    <string name="gym_form_name">Exercise</string>
+    <string name="gym_form_comment">Note</string>
+    <string name="gym_form_weekday">Day</string>
+    <string name="gym_form_sets">Series</string>
+    <string name="gym_form_reps">Reps per serie</string>
+    <string name="gym_form_weight">Weight (kg)</string>
+    <string name="gym_form_save">Save</string>
+
+    <string name="gym_error_name_blank">Enter an exercise name</string>
+    <string name="gym_error_sets_invalid">Enter a number of series between 1 and 20</string>
+    <string name="gym_error_reps_invalid">Enter a number of reps between 1 and 1000</string>
+    <string name="gym_error_weight_field_invalid">Leave empty for bodyweight, or enter 0 to 1000</string>
+    <string name="gym_error_save_failed">Could not save this exercise</string>
+    <string name="gym_error_delete_failed">Could not delete this exercise</string>
+
+    <string name="gym_delete_title">Delete this exercise?</string>
+    <string name="gym_delete_message">It will be gone for good, along with today\'s ticks.</string>
+</resources>
