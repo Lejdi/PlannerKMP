@@ -50,7 +50,7 @@ class GymExerciseEditViewModelTest {
     private fun viewModel(
         datasource: FakeGymDatasource,
         exerciseId: Long? = null,
-        dayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
+        dayOfWeek: DayOfWeek? = DayOfWeek.MONDAY,
         savedStateHandle: SavedStateHandle = SavedStateHandle(),
     ) = GymExerciseEditViewModel(
         exerciseId,
@@ -100,6 +100,19 @@ class GymExerciseEditViewModelTest {
         assertEquals("60", form.weight, "the weight is shown as 60, not 60.0")
         assertTrue(viewModel.state.value.isFormSeeded)
         assertFalse(viewModel.state.value.isLoading)
+    }
+
+    /**
+     * Editing passes no weekday — the row carries the only correct one, which is the reason the
+     * nav key for an edit does not have the field at all.
+     */
+    @Test
+    fun anEditWithoutASeedTakesTheWeekdayFromTheRow() = runTest {
+        val stored = exercise(id = 1L, dayOfWeek = DayOfWeek.SATURDAY)
+        val viewModel = viewModel(FakeGymDatasource(listOf(stored)), exerciseId = 1L, dayOfWeek = null)
+        runCurrent()
+
+        assertEquals(DayOfWeek.SATURDAY, viewModel.state.value.form.dayOfWeek)
     }
 
     /** Later emissions must not overwrite what the user is in the middle of typing. */

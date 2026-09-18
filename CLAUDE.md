@@ -16,8 +16,8 @@ The data layer is reactive — datasources expose `Flow<AppResult<T>>` over
 SQLDelight query flows, so a write re-emits to every observer and no screen
 re-queries on entry.
 
-Three features: `:feature:tasks` (tasks/TODOs), `:feature:grocery` (grocery list) and
-`:feature:routines` (daily routines).
+Four features: `:feature:tasks` (tasks/TODOs), `:feature:grocery` (grocery list),
+`:feature:routines` (daily routines) and `:feature:gym` (a weekly gym plan).
 
 ## Commands
 
@@ -32,7 +32,7 @@ Use the Gradle wrapper from the repo root (`./gradlew`).
 | A single test class | append `--tests "pl.lejdi.plannerkmp.core.mvi.BaseViewModelTest"` |
 | Static analysis | `./gradlew detekt` (add `--auto-correct` to fix formatting) |
 | Architecture rules | `./gradlew architectureCheck` |
-| Export a SQLDelight schema after editing a `.sq` | `./gradlew generateCommonMainTasksDatabaseSchema` (and the `...GroceryDatabaseSchema` / `...RoutinesDatabaseSchema` / `...KeyValueDatabaseSchema` equivalents) |
+| Export a SQLDelight schema after editing a `.sq` | `./gradlew generateCommonMainTasksDatabaseSchema` (and the `...GroceryDatabaseSchema` / `...RoutinesDatabaseSchema` / `...GymDatabaseSchema` / `...KeyValueDatabaseSchema` equivalents) |
 
 Run the iOS app from Xcode (`iosApp/iosApp.xcodeproj`), not via Gradle.
 
@@ -212,6 +212,29 @@ Modules, declared in `settings.gradle.kts`:
   The footer is collapsed, not dropped, because the checkbox is the only way to *un*-tick and a row
   that vanished on a mis-tap could not be recovered until midnight. `allDone` is separate from
   `isEmpty` — both leave the list bare and they mean opposite things, so they get different wording.
+- **`:feature:gym`** — `GymExercise`/`GymExerciseDraft`/`DayExercise`/`GymDay`/`GymField`, the
+  `GymDatasource` port and its own `gymExerciseEntity` schema. A weekly plan: **an exercise belongs
+  to a `DayOfWeek`, not to a date**, so the seven pages repeat every week, there is no row per date
+  and no history table. An exercise has a name, an optional comment, a series count, reps per series
+  and an *optional* weight (null is a bodyweight exercise, not a missing value). Bounds are domain
+  rules with a UI reason: `MAX_SETS` is 20 because the list draws one checkbox per series.
+  **Completion is a count plus the date it was written on** — `completedSets`/`completedOn` — and
+  "done today" is derived by `ObserveGymWeek`, which combines the query flow with `todayFlow()`. So
+  the daily reset is free, exactly as in `:feature:routines`: no cleanup initializer, nothing to run
+  overnight. `doneSets` clamps into `setsCount`, because the form may shrink the series count under a
+  row that is already ticked and deliberately does not touch the completion columns when it does.
+  `ToggleExerciseSet` holds the tap rule — tapping series *k* that is not done counts up to *k*, one
+  that is counts down to *k−1*, and reaching zero clears the date. Writes come in **three** shapes
+  for the reason the other features split theirs in two: `updateDetails` (the form), `updateWeight`
+  (the inline editor on the list row) and `updateCompletedSets` (the checkboxes) each own their
+  columns, since none of the three writers has read what the others wrote. The screen is a
+  seven-page `HorizontalPager` where the page index *is* the weekday ordinal, with a peek row of
+  chips above it — the one-tap path from Sunday back to Monday, since there is no wrap-around. **The
+  series checkboxes render on today's page only**: a tick is stamped with today's date, so one made
+  on another weekday's page would be recorded as done today and appear on the wrong page. Other days
+  show the same cards as a plan, still weight-editable and still long-pressable. A done exercise
+  keeps its place at reduced alpha rather than moving or vanishing. The tab icon is a **vendored**
+  `ImageVector`: `material-icons-core` has no dumbbell.
 
 ### Rules
 

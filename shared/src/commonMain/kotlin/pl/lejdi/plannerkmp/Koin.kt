@@ -13,6 +13,7 @@ import pl.lejdi.plannerkmp.core.common.di.commonModule
 import pl.lejdi.plannerkmp.core.database.di.databaseModule
 import pl.lejdi.plannerkmp.core.database.di.keyValueCacheModule
 import pl.lejdi.plannerkmp.feature.grocery.di.groceryModule
+import pl.lejdi.plannerkmp.feature.gym.di.gymModule
 import pl.lejdi.plannerkmp.feature.routines.di.routinesModule
 import pl.lejdi.plannerkmp.feature.tasks.di.tasksModule
 
@@ -25,7 +26,7 @@ private const val TAG = "AppStartup"
  * tabs, nav entries and startup work inside it are — but it is the only place left that names a
  * feature.
  */
-internal val featureModules = listOf(tasksModule, groceryModule, routinesModule)
+internal val featureModules = listOf(tasksModule, groceryModule, routinesModule, gymModule)
 
 /**
  * Every module the app runs on, exposed so a test can assert the graph resolves.

@@ -75,7 +75,8 @@ import pl.lejdi.plannerkmp.core.ui.resources.Res as CoreRes
 @Composable
 fun GymExerciseEditScreen(
     exerciseId: Long?,
-    dayOfWeek: DayOfWeek,
+    /** The weekday a new exercise starts on; null when editing, where the row supplies it. */
+    dayOfWeek: DayOfWeek?,
     onNavigateBack: () -> Unit,
     viewModel: GymExerciseEditViewModel = koinViewModel {
         parametersOf(exerciseId, dayOfWeek)

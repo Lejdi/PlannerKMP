@@ -28,12 +28,14 @@ import pl.lejdi.plannerkmp.feature.gym.domain.GymField
  *
  * @param initialExerciseId seeds the state and nothing else. The id the screen *works from* is
  *   `state.exerciseId` throughout.
- * @param initialDayOfWeek the page the user added from, and the starting weekday of a *new*
- *   exercise only — an existing one takes its weekday from the row when the form seeds.
+ * @param initialDayOfWeek the page a *new* exercise was added from, and null when editing an
+ *   existing one — which takes its weekday from the row it loads, the only value that could be
+ *   right after the exercise has been moved. Null rather than an arbitrary weekday nobody reads:
+ *   the form's own default is then the single place a fallback lives.
  */
 class GymExerciseEditViewModel(
     private val initialExerciseId: Long?,
-    private val initialDayOfWeek: DayOfWeek,
+    private val initialDayOfWeek: DayOfWeek?,
     savedStateHandle: SavedStateHandle,
     logger: Logger,
     private val gym: GymDatasource,
@@ -51,7 +53,8 @@ class GymExerciseEditViewModel(
     override fun createInitialState() = GymExerciseEditState(
         isLoading = initialExerciseId != null,
         exerciseId = initialExerciseId,
-        form = GymExerciseForm(dayOfWeek = initialDayOfWeek),
+        // Without a seed the form keeps its own default, which the stored row then overwrites.
+        form = initialDayOfWeek?.let { GymExerciseForm(dayOfWeek = it) } ?: GymExerciseForm(),
     )
 
     override fun captureInput(state: GymExerciseEditState) = GymExerciseEditInput(
