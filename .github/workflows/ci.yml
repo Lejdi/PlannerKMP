@@ -52,8 +52,18 @@ jobs:
           path: '**/build/reports/detekt/**'
 
   build:
-    # macOS so the iOS targets can be compiled: half of this codebase is only built by them.
-    runs-on: macos-15
+    # macOS so the iOS targets can be compiled: half of this codebase is only built by them, and
+    # macOS *26* because that image's default Xcode is 26.x. Compose Multiplatform 1.11.1 ships a
+    # prebuilt libCMPUIKitUtils.a inside its ui-uikit klib whose CMPLayoutRegion.o references
+    # UIViewLayoutRegion - UIKit API_AVAILABLE(ios(26.0)) - and auto-links UIUtilities.framework,
+    # which exists only in the iOS 26 SDK. On macos-15, whose default is Xcode 16.4 / iOS 18.5,
+    # linking anything that pulls that archive in dies with "Undefined symbols for architecture
+    # arm64: _OBJC_CLASS_$_UIViewLayoutRegion". It took out the debug *test* binaries first because
+    # their Kotlin/Native compiler cache links the archive whole, while the release framework link
+    # drops the object nothing reaches and got away with it. Any 26.x is enough; the pin is to the
+    # image, not to a patch version. Compose 1.12.0 resolves that symbol at runtime instead, so this
+    # can go back to a lower image once the version bump happens.
+    runs-on: macos-26
     timeout-minutes: 60
 
     steps:

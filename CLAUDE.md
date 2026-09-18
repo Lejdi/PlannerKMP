@@ -62,13 +62,23 @@ Notes:
   still checks that those tests compile and link. This matters because the
   datasource, cache and DI-graph tests live in `commonTest`, so it is the only task
   exercising `NativeSqliteDriver` and the iOS half of the Koin graph.
+- **Anything that links an iOS binary needs the iOS 26 SDK, so Xcode 26.** Compose
+  Multiplatform 1.11.1 ships a prebuilt `libCMPUIKitUtils.a` referencing
+  `UIViewLayoutRegion`, UIKit `API_AVAILABLE(ios(26.0))`, and auto-linking
+  `UIUtilities.framework`, which exists in no earlier SDK. Under Xcode 16 the link dies
+  with "Undefined symbols for architecture arm64: `_OBJC_CLASS_$_UIViewLayoutRegion`" —
+  the *debug test* binaries first, because their compiler cache links that archive whole
+  while the release framework link drops the object nothing reaches. Compose 1.12.0
+  resolves the symbol at runtime, so this ends with that bump.
 - detekt has no baseline and the build fails on any issue. Type resolution is
   deliberately not configured (KMP false positives around `expect`/`actual`), so the
   `coroutines` ruleset does not run.
 
 CI (`.github/workflows/ci.yml`) is two jobs. `static-analysis` runs
-`architectureCheck` then `detekt`. `build` runs the JVM tests, the Android debug
-*and release* builds, an assertion that the Compose resource bundles are in the
+`architectureCheck` then `detekt` on `ubuntu-latest`. `build` runs on **`macos-26`**,
+whose default Xcode is 26.x, for the SDK reason above — `macos-15` carries Xcode 26 as
+well, but only alongside the 16.4 it actually selects — and covers the JVM tests, the
+Android debug *and release* builds, an assertion that the Compose resource bundles are in the
 release APK, compilation for **both** iOS targets, the `iosArm64` framework link,
 the iOS tests and an `xcodebuild` of the Xcode project. detekt is a separate job so
 a style finding does not hide whether the tests pass.
@@ -343,4 +353,5 @@ unsigned when not.
 Kotlin/Android compilation, Java toolchain 21 (Azul) for the Gradle daemon. Android
 `compileSdk`/`targetSdk` 36, `minSdk` 24. Compose Multiplatform 1.11.1, Koin 4.1.1 (pinned per
 artifact, no BOM), SQLDelight 2.3.2, Navigation 3 1.1.1, Ktor 3.5.2, kotlinx.serialization
-1.11.0, kotlinx.coroutines 1.11.0, kotlinx-datetime 0.7.1, detekt 1.23.8.
+1.11.0, kotlinx.coroutines 1.11.0, kotlinx-datetime 0.7.1, detekt 1.23.8. Xcode 26 (iOS 26
+SDK) for anything that links an iOS binary.
