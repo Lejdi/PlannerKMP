@@ -279,6 +279,16 @@ class TaskEditViewModelTest {
     }
 
     @Test
+    fun pickingAStartDateLeavesAnUnsetEndDateEmpty() = runTest {
+        val viewModel = viewModel(taskId = null)
+        viewModel.onEvent(TaskEditEvent.TypeChanged(TaskType.Periodic))
+
+        viewModel.onEvent(TaskEditEvent.StartDateChanged(today.plus(5, DateTimeUnit.DAY)))
+
+        assertNull(viewModel.state.value.form.endDate)
+    }
+
+    @Test
     fun dialogVisibilityIsStateNotComposableLocals() = runTest {
         val viewModel = viewModel(taskId = null)
 

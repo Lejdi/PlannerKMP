@@ -89,9 +89,14 @@ class TaskEditViewModel(
             is TaskEditEvent.TypeChanged -> updateForm { copy(type = event.value) }
             is TaskEditEvent.StartDateChanged -> updateForm {
                 // An end date that now precedes the start is dragged along rather than left behind
-                // to fail validation the user cannot see the cause of.
-                val snappedEnd = endDate?.takeIf { it >= event.value } ?: event.value
-                copy(startDate = event.value, endDate = snappedEnd).withoutError(TaskField.EndDate)
+                // to fail validation the user cannot see the cause of. Only one that exists,
+                // though: a null end date means "repeats forever", and the snap used to collapse
+                // the two cases through one elvis, so picking a start date on a fresh form
+                // invented an end date equal to it — a periodic task that ran exactly once.
+                copy(
+                    startDate = event.value,
+                    endDate = endDate?.coerceAtLeast(event.value),
+                ).withoutError(TaskField.EndDate)
             }
             is TaskEditEvent.EndDateChanged -> updateForm {
                 copy(endDate = event.value).withoutError(TaskField.EndDate)
