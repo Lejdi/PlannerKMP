@@ -2,6 +2,21 @@
 
 Guidance for Claude Code (claude.ai/code) when working in this repository.
 
+**This file is how to build a feature here — conventions, structure, commands, and the rules
+that keep them.** It deliberately describes no product behaviour. What each feature *does*,
+and why, lives in [`docs/features/`](docs/features/README.md), one document per module. When a
+change alters behaviour, update the feature document in the same commit; when it alters how
+modules are wired or built, update this file.
+
+## Documentation map
+
+| Where | What it is |
+| --- | --- |
+| `CLAUDE.md` (this file) | How to build in this repo: module graph, conventions, rules, commands, build infra |
+| [`docs/features/`](docs/features/README.md) | What each feature does and why — the domain models, rules and observable behaviour |
+| [`docs/architecture-blueprint.md`](docs/architecture-blueprint.md) | The prescriptive build order for starting a *new* KMP + Compose app, distilled from this one |
+| [`docs/specs/`](docs/specs/) | Dated, historical reference — notably the legacy pure-Android app's business logic |
+
 ## Project status
 
 A Kotlin Multiplatform + Compose Multiplatform app. `androidApp` and `iosApp` are
@@ -17,7 +32,8 @@ SQLDelight query flows, so a write re-emits to every observer and no screen
 re-queries on entry.
 
 Four features: `:feature:tasks` (tasks/TODOs), `:feature:grocery` (grocery list),
-`:feature:routines` (daily routines) and `:feature:gym` (a weekly gym plan).
+`:feature:routines` (daily routines) and `:feature:gym` (a weekly gym plan). What each one
+does is in [`docs/features/`](docs/features/README.md).
 
 ## Commands
 
@@ -165,76 +181,21 @@ Modules, declared in `settings.gradle.kts`:
   `rememberViewModelStoreNavEntryDecorator()`, without which every nav entry shares the
   Activity's `ViewModelStore`) above the tab switch, with a `rememberNavBackStack` per tab.
   Every `NavKey` is `@Serializable` and carries ids, never entities.
-- **`:feature:tasks`** — `Task`/`TaskDraft`/`TaskSchedule`/`TaskType`/`TaskField`.
-  `TaskDraft.create(...)` is the only way to build a valid task and returns an `AppResult`
-  naming *every* offending field. **When a task is due is a sealed `TaskSchedule`** —
-  `Asap(createdOn)` | `OneTime(date)` | `Periodic(startDate, daysInterval, endDate)`, each
-  with an optional `hour`, each carrying only the fields it has; the flat columns stay in
-  the `.sq` schema (a schema is a storage format, not a domain model) with
-  `SqlDelightTasksDatasource` owning the translation. The **recurrence rules live on the
-  schedule** — `occursOn`, `occurrenceOnOrAfter`, `nextOccurrenceAfter`, `hasExpiredBy`,
-  `startingFrom` — each a `when (this)`, so adding a kind breaks the build at every rule
-  that must account for it. On top: `ObserveTasksForDashboard` (the 8-day window, a
-  `FlowUseCase` combining the task flow with `todayFlow()`), `MarkTaskComplete` (takes a
-  `Params(task, completedOn)` — a periodic task appears once per occurrence, so advancing
-  from its own `startDate` moved the wrong one) and `UpdateTasksDates` (the daily cleanup:
-  the pure `planCleanup` decides the day's changes and `TasksDatasource.runCleanup` reads,
-  plans and applies them **inside one transaction**). The cleanup runs from
-  `TasksCleanupInitializer`, an `AppInitializer` collecting `todayFlow()` for the app's
-  lifetime — not from a ViewModel, and not from startup alone. Writes come in two shapes on
-  purpose: `editTask` writes the whole row and only the edit form calls it; `rescheduleTask`
-  writes the schedule columns only and is what completion and cleanup use, since both act on
-  a `Task` read earlier and a whole-row update would push its stale name over later edits.
-  `TaskEditViewModel` **observes** its row through `observeTask(id)`, seeding the form from
-  the first emission only and using the subscription to notice the row being deleted. There
-  is deliberately no one-shot `getTask`.
-- **`:feature:grocery`** — `GroceryItem`/`GroceryItemDraft`/`GroceryField`, the
-  `GroceryDatasource` port, its own `groceryItemEntity` schema, and `GroceryListScreen`
-  (inline-expand add/edit rows driven by one `GroceryEditor` in the state). Completing an
-  item is a permanent delete, paired with an **Undo** offer lasting exactly as long as the
-  snackbar carrying it. Editing is a visible button as well as a long press.
-- **`:feature:routines`** — `Routine`/`RoutineDraft`/`TodayRoutine`/`RoutineField`, the
-  `RoutinesDatasource` port and its own `routineEntity` schema. A routine is a daily habit with a
-  name and an optional note, ticked off for today and only for today: there is no way to see another
-  day, and at local midnight everything comes back un-ticked. **That reset is derived, not stored** —
-  the row holds `completedOn`, the last date it was ticked, and `ObserveRoutinesForToday` combines
-  the query flow with `todayFlow()` so "done" means `completedOn == today` as evaluated right now.
-  Hence no cleanup initializer and no history table: nothing has to run overnight for the screen to
-  be right in the morning, and the app can be shut for a week without drifting.
-  `ToggleRoutineDone` holds the write half of that convention (today's date, or `null`). Writes come
-  in two shapes for the same reason `:feature:tasks` splits `editTask` from `rescheduleTask`:
-  `updateDetails` writes the text columns and `updateCompletedOn` writes that one column, so a
-  rename cannot un-tick a routine and a tick cannot revert a rename. Deleting is behind a
-  confirmation dialog rather than grocery's undo-snackbar — it is rare and deliberate here, not a
-  tap made forty times a trip. **A ticked routine leaves the list** for a collapsed "Done today (N)"
-  footer, so what is on screen is what is left to do; `RoutinesState` derives `pendingRoutines` /
-  `doneRoutines` from `isDoneToday`, which is presentation grouping over the domain's own answer.
-  The footer is collapsed, not dropped, because the checkbox is the only way to *un*-tick and a row
-  that vanished on a mis-tap could not be recovered until midnight. `allDone` is separate from
-  `isEmpty` — both leave the list bare and they mean opposite things, so they get different wording.
-- **`:feature:gym`** — `GymExercise`/`GymExerciseDraft`/`DayExercise`/`GymDay`/`GymField`, the
-  `GymDatasource` port and its own `gymExerciseEntity` schema. A weekly plan: **an exercise belongs
-  to a `DayOfWeek`, not to a date**, so the seven pages repeat every week, there is no row per date
-  and no history table. An exercise has a name, an optional comment, a series count, reps per series
-  and an *optional* weight (null is a bodyweight exercise, not a missing value). Bounds are domain
-  rules with a UI reason: `MAX_SETS` is 20 because the list draws one checkbox per series.
-  **Completion is a count plus the date it was written on** — `completedSets`/`completedOn` — and
-  "done today" is derived by `ObserveGymWeek`, which combines the query flow with `todayFlow()`. So
-  the daily reset is free, exactly as in `:feature:routines`: no cleanup initializer, nothing to run
-  overnight. `doneSets` clamps into `setsCount`, because the form may shrink the series count under a
-  row that is already ticked and deliberately does not touch the completion columns when it does.
-  `ToggleExerciseSet` holds the tap rule — tapping series *k* that is not done counts up to *k*, one
-  that is counts down to *k−1*, and reaching zero clears the date. Writes come in **three** shapes
-  for the reason the other features split theirs in two: `updateDetails` (the form), `updateWeight`
-  (the inline editor on the list row) and `updateCompletedSets` (the checkboxes) each own their
-  columns, since none of the three writers has read what the others wrote. The screen is a
-  seven-page `HorizontalPager` where the page index *is* the weekday ordinal, with a peek row of
-  chips above it — the one-tap path from Sunday back to Monday, since there is no wrap-around. **The
-  series checkboxes render on today's page only**: a tick is stamped with today's date, so one made
-  on another weekday's page would be recorded as done today and appear on the wrong page. Other days
-  show the same cards as a plan, still weight-editable and still long-pressable. A done exercise
-  keeps its place at reduced alpha rather than moving or vanishing. The tab icon is a **vendored**
-  `ImageVector`: `material-icons-core` has no dumbbell.
+- **`:feature:*`** — one module per user-facing area, each owning its domain model and
+  validation, its storage port and `.sq` schema, its screens and ViewModels, its Koin module,
+  its navigation contributions and its own `composeResources`. **What each one does, and why,
+  is in [`docs/features/`](docs/features/README.md) — not here.** This file is how to build a
+  feature; those files are what the features do.
+
+  | Module | Owns | Business logic |
+  | --- | --- | --- |
+  | `:feature:tasks` | `Task`/`TaskDraft`/`TaskSchedule`/`TaskType`/`TaskField`, `TasksDatasource`, `taskEntity`, `ObserveTasksForDashboard`, `MarkTaskComplete`, `UpdateTasksDates`, `TasksCleanupInitializer` | [tasks.md](docs/features/tasks.md) |
+  | `:feature:grocery` | `GroceryItem`/`GroceryItemDraft`/`GroceryField`, `GroceryDatasource`, `groceryItemEntity` | [grocery.md](docs/features/grocery.md) |
+  | `:feature:routines` | `Routine`/`RoutineDraft`/`TodayRoutine`/`RoutineField`, `RoutinesDatasource`, `routineEntity`, `ObserveRoutinesForToday`, `ToggleRoutineDone` | [routines.md](docs/features/routines.md) |
+  | `:feature:gym` | `GymExercise`/`GymExerciseDraft`/`DayExercise`/`GymDay`/`GymField`, `GymDatasource`, `gymExerciseEntity`, `ObserveGymWeek`, `ToggleExerciseSet` | [gym.md](docs/features/gym.md) |
+
+  `:feature:tasks` is the one feature with an `AppInitializer`; the other three need no
+  overnight job at all, for the reason *Derive against the clock* below gives.
 
 ### Rules
 
@@ -247,6 +208,45 @@ window, the cleanup, what completing a task means. Plain CRUD goes straight to t
 `TaskEditViewModel` takes `TasksDatasource` directly rather than an `AddTask` class per
 operation. The domain boundary is the port in `domain/`, not a class per verb.
 
+**A valid entity is only constructible through its draft.** Each feature has a
+`<Thing>Draft` whose constructor is private and whose `create(...)` returns an `AppResult`
+naming *every* offending field, plus an `internal ofStored(...)` for rows that were validated
+when they were written. The stored type's constructor is `internal` for the same reason: while
+it was public, "the only way to build a valid one" held for the draft and not for the type
+every other layer actually handles, which took a public constructor and a public `copy`. An id
+is real or the thing is a draft — nothing reads `0L` as "not saved yet".
+
+**Model the states that exist, not the fields they need.** Where a kind of thing has
+kind-dependent fields, it is a sealed type carrying only the fields that kind has
+(`TaskSchedule`), and every rule over it is an exhaustive `when` — so adding a kind breaks the
+build at each rule that must account for it. Flags plus derived kinds make contradictions
+constructible and silent.
+
+**A schema is a storage format, not a domain model.** Flat, legacy or denormalised columns are
+fine in the `.sq` file; the datasource owns the translation. Do not reshape the domain to
+match the table, or the table to match the domain.
+
+**Derive against the clock rather than storing what something must clear.** A row stores the
+date a thing was done (`completedOn`), never a boolean; "done today" is computed by combining
+the query flow with `TodayProvider.todayFlow()`. The reset is then free — no cleanup job, no
+history table, nothing to run overnight, and no drift after the app has been shut for a week.
+`:feature:tasks` has an `AppInitializer` only because its rules genuinely *mutate* rows
+(deleting expired tasks, re-anchoring periodic ones); where a derivation will do, use one.
+Anything deriving from a date must combine with `todayFlow()`, not read the date off each
+emission: a query flow re-emits only when its table is written, so a quiet night leaves the
+screen on yesterday.
+
+**One write per set of columns its writer owns.** When several writers touch a row without
+having read each other's work, the port gets a method per group of columns — `editTask` /
+`rescheduleTask`, `updateDetails` / `updateCompletedOn`, `updateDetails` / `updateWeight` /
+`updateCompletedSets`. A whole-row update from a writer holding a stale copy overwrites the
+other columns and SQLite reports success. Counting the writers is how you know how many
+methods to declare.
+
+**A bound that exists for a UI reason is still a domain rule.** `MAX_SETS` is 20 because the
+list draws one checkbox per series; it lives in the domain and the screen reads the same
+constant. A number the UI cannot render is bad data, not a layout problem.
+
 **Screens** are a thin `@Composable` resolving the ViewModel plus a stateless `...Content`
 composable taking the state and one `onEvent: (Event) -> Unit`; child composables never take
 the ViewModel. All UI state — dialog visibility, the current message — lives in the
@@ -256,6 +256,18 @@ the ViewModel. All UI state — dialog visibility, the current message — lives
 **An event carries ids, never entities** — the same rule a `NavKey` follows. A whole `Task`
 in an event plans from a snapshot captured when the card was drawn, ignoring the live list in
 the ViewModel receiving it.
+
+**A screen that edits a row observes it**, through `observeX(id)`, seeding its form from the
+first emission only and using the subscription to notice the row being deleted underneath it.
+There is deliberately no one-shot `getX`: a snapshot turns a save into a read-modify-write
+over data another writer may already have moved. A form that never loaded counts as *empty*,
+so a failed load cannot render a blank but live form whose Save overwrites the real row.
+
+**Match a destructive affordance to how often the action is taken and what it costs to get
+wrong.** A tap made forty times a shopping trip gets no dialog and an undo offer lasting
+exactly as long as its snackbar; a rare, deliberate delete gets a confirmation. A destructive
+confirmation is never restored after process death — it would come back under a thumb already
+moving towards where the confirm button was.
 
 **Strings**: messages are typed enums the UI resolves (a `DomainError`'s `message` is driver
 text for logs). Every user-visible string is a Compose resource in the feature's
