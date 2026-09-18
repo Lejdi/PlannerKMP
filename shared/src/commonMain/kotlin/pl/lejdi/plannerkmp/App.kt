@@ -3,6 +3,7 @@ package pl.lejdi.plannerkmp
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -140,7 +141,16 @@ private fun AppContent(koin: Koin) {
                     },
                 ) { padding ->
                     val navigator = navigators.getOrNull(selectedTabIndex) ?: return@Scaffold
-                    Box(modifier = Modifier.padding(padding)) {
+                    // `padding` *and* `consumeWindowInsets`, which is the pair Scaffold's own
+                    // contract asks for. Padding alone positions this Box correctly but tells
+                    // nothing below it that the insets are now handled, and every feature screen
+                    // hosts its own Scaffold: each one re-applied the whole of
+                    // `WindowInsets.systemBars`, leaving a band of its container colour above the
+                    // bottom bar that ate the last row of every list. `imePadding()` on the two
+                    // edit forms compounded it — it re-applied the full IME height measured from
+                    // the window bottom, on top of content already lifted clear of it, so on a
+                    // periodic task the interval and date fields were pushed off screen.
+                    Box(modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
                         CompositionLocalProvider(LocalNavigator provides navigator) {
                             NavDisplay(
                                 backStack = navigator.backStack,
