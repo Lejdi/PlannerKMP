@@ -1,0 +1,66 @@
+-- dayOfWeek is what an exercise belongs to, rather than a date: the plan repeats every week, so
+-- there is no row per date, no history table, and nothing that has to run overnight for this
+-- screen to be right in the morning.
+--
+-- completedSets/completedOn are the pair that makes the daily reset free — the number of series
+-- ticked, and the date they were ticked on. "Done today" is therefore
+-- `completedOn == today && completedSets >= setsCount`, evaluated against a live clock in
+-- ObserveGymWeek rather than read out of storage. This is the convention routineEntity already
+-- follows, and the reason neither table grows without bound.
+--
+-- The three counts are plain INTEGER rather than `AS Int`: that annotation needs IntColumnAdapter
+-- from app.cash.sqldelight:primitive-adapters, which this build does not depend on, and
+-- taskEntity already stores daysInterval the same way. A new dependency to save two toInt() calls
+-- is the wrong trade.
+CREATE TABLE gymExerciseEntity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    comment TEXT,
+    dayOfWeek INTEGER AS kotlinx.datetime.DayOfWeek NOT NULL,
+    setsCount INTEGER NOT NULL,
+    repsPerSet INTEGER NOT NULL,
+    weight REAL,
+    completedSets INTEGER NOT NULL DEFAULT 0,
+    completedOn TEXT AS kotlinx.datetime.LocalDate
+);
+
+-- Ordered explicitly, and by dayOfWeek first. Nothing sorts this list downstream, and a bare
+-- SELECT * returns rows in whatever order the query planner finds convenient — SQLite usually
+-- gives rowid order for a plain table scan but does not promise to, and stops doing so after a
+-- VACUUM. The ISO day number is stored precisely so that this comes out in calendar order.
+selectAll:
+SELECT * FROM gymExerciseEntity ORDER BY dayOfWeek, id;
+
+selectById:
+SELECT * FROM gymExerciseEntity WHERE id = :id;
+
+insert:
+INSERT INTO gymExerciseEntity(name, comment, dayOfWeek, setsCount, repsPerSet, weight)
+VALUES (:name, :comment, :dayOfWeek, :setsCount, :repsPerSet, :weight);
+
+-- Every column the form owns, deliberately not the completion pair.
+--
+-- Three writers touch an exercise and none of them has read what the others wrote: the form owns
+-- the text and the numbers, the inline editor on the list row owns the weight, and the checkboxes
+-- own the completion pair. A whole-row write from any one of them pushes its stale copy of the
+-- others' columns — a rename un-ticking the day, a tick reverting a weight the user just typed —
+-- and SQLite reports every one of them as success. This is the same split taskEntity makes
+-- between `update` and `updateSchedule`, for the same reason.
+updateDetails:
+UPDATE gymExerciseEntity
+SET name = :name, comment = :comment, dayOfWeek = :dayOfWeek, setsCount = :setsCount,
+    repsPerSet = :repsPerSet, weight = :weight
+WHERE id = :id;
+
+-- The weight alone, for the inline editor on the list row. It holds no copy of the other columns,
+-- so it cannot push a stale one.
+updateWeight:
+UPDATE gymExerciseEntity SET weight = :weight WHERE id = :id;
+
+-- The completion pair alone, for the checkboxes. Deliberately not the weight: the row the card
+-- was drawn from may be several edits old by the time a series is ticked.
+updateCompletedSets:
+UPDATE gymExerciseEntity SET completedSets = :completedSets, completedOn = :completedOn WHERE id = :id;
+
+deleteById:
+DELETE FROM gymExerciseEntity WHERE id = :id;
