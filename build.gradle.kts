@@ -124,8 +124,18 @@ val moduleDependencyRules: Map<String, List<String>> = buildMap {
     put(":feature:tasks", everyCore)
     put(":feature:grocery", everyCore)
     put(":feature:routines", everyCore)
+    put(":feature:gym", everyCore)
     // The composition root is the only place that may name both layers.
-    put(":shared", everyCore + listOf(":core:network", ":feature:tasks", ":feature:grocery", ":feature:routines"))
+    put(
+        ":shared",
+        everyCore + listOf(
+            ":core:network",
+            ":feature:tasks",
+            ":feature:grocery",
+            ":feature:routines",
+            ":feature:gym",
+        ),
+    )
     put(":androidApp", listOf(":shared"))
 }
 
