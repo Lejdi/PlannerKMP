@@ -41,8 +41,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -55,8 +57,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -481,13 +485,24 @@ private fun WeightControl(
 ) {
     if (editor != null) {
         val focusRequester = remember { FocusRequester() }
+        // Seeded once per opening, with the caret *after* the number rather than before it. The
+        // field opens on a weight that already exists, so typing means appending or replacing a
+        // digit — never prepending, which is what Compose's String-based field does by default
+        // (its selection starts at 0 and the String API cannot move it). The ViewModel still owns
+        // the text; this holds the cursor, which is the field's own business.
+        var fieldValue by remember(editor.exerciseId) {
+            mutableStateOf(TextFieldValue(editor.text, TextRange(editor.text.length)))
+        }
         // The editor exists *because* the user tapped the weight, so the field takes focus itself
         // and raises the keyboard. Without this the tap only swapped a text for an empty-looking
         // field and the user had to tap again to type — which is not "very easy".
         LaunchedEffect(editor.exerciseId) { focusRequester.requestFocus() }
         PlainTextField(
-            value = editor.text,
-            onValueChange = { onEvent(GymEvent.WeightTextChanged(it)) },
+            value = fieldValue,
+            onValueChange = {
+                fieldValue = it
+                onEvent(GymEvent.WeightTextChanged(it.text))
+            },
             placeholder = stringResource(Res.string.gym_weight_hint),
             textStyle = MaterialTheme.typography.bodyMedium,
             isError = editor.isInvalid,
