@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		981C14CD94B6F0F1CF4FAFE0 /* PlannerKMP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PlannerKMP.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		981C14CD94B6F0F1CF4FAFE0 /* Planner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Planner.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -59,7 +59,7 @@
 		B0B2A35C9343ADB0587EE972 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				981C14CD94B6F0F1CF4FAFE0 /* PlannerKMP.app */,
+				981C14CD94B6F0F1CF4FAFE0 /* Planner.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,7 +87,7 @@
 			packageProductDependencies = (
 			);
 			productName = iosApp;
-			productReference = 981C14CD94B6F0F1CF4FAFE0 /* PlannerKMP.app */;
+			productReference = 981C14CD94B6F0F1CF4FAFE0 /* Planner.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */

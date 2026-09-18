@@ -1,6 +1,9 @@
 TEAM_ID=
 
-PRODUCT_NAME=PlannerKMP
+// The name on the home screen: GENERATE_INFOPLIST_FILE derives CFBundleName from it, and there is
+// no CFBundleDisplayName overriding that. The bundle identifier below is spelled out rather than
+// built from it, so renaming the app cannot change the identity of an installed one.
+PRODUCT_NAME=Planner
 PRODUCT_BUNDLE_IDENTIFIER=pl.lejdi.plannerkmp.PlannerKMP$(TEAM_ID)
 
 // Shared with Gradle - see version.properties at the repo root.
