@@ -53,6 +53,7 @@ import pl.lejdi.plannerkmp.core.navigation.NavAnimation
 import pl.lejdi.plannerkmp.core.ui.CollectEffects
 import pl.lejdi.plannerkmp.core.ui.components.LoadableContent
 import pl.lejdi.plannerkmp.core.ui.components.MessageHost
+import pl.lejdi.plannerkmp.core.ui.components.screenWindowInsets
 import pl.lejdi.plannerkmp.core.ui.format.toFieldString
 import pl.lejdi.plannerkmp.core.ui.resources.core_action_retry
 import pl.lejdi.plannerkmp.core.ui.theme.Sizing
@@ -131,6 +132,7 @@ internal fun DashboardContent(
     fabModifier: Modifier = Modifier,
 ) {
     Scaffold(
+        contentWindowInsets = screenWindowInsets,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(

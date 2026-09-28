@@ -24,9 +24,12 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -42,6 +45,7 @@ import org.koin.core.parameter.parametersOf
 import pl.lejdi.plannerkmp.core.ui.CollectEffects
 import pl.lejdi.plannerkmp.core.ui.components.LoadableContent
 import pl.lejdi.plannerkmp.core.ui.components.MessageHost
+import pl.lejdi.plannerkmp.core.ui.components.screenWindowInsets
 import pl.lejdi.plannerkmp.core.ui.format.displayName
 import pl.lejdi.plannerkmp.core.ui.format.shortDisplayName
 import pl.lejdi.plannerkmp.core.ui.resources.core_action_cancel
@@ -122,7 +126,10 @@ internal fun GymExerciseEditContent(
     snackbarHostState: SnackbarHostState,
     onEvent: (GymExerciseEditEvent) -> Unit,
 ) {
-    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
+    Scaffold(
+        contentWindowInsets = screenWindowInsets,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { padding ->
         // The middle arm matters: without it a failed load leaves a blank but fully live form that
         // still believes it is editing a real row, and a Save from there writes empty fields over
         // the stored exercise.
@@ -164,7 +171,11 @@ internal fun GymExerciseEditContent(
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.padding(bottom = Spacing.sm),
                     )
-                    NameAndCommentFields(state.form, onEvent)
+                    NameAndCommentFields(
+                        form = state.form,
+                        focusName = !state.isEditingExisting,
+                        onEvent = onEvent,
+                    )
                     WeekdaySelector(state.form, onEvent)
                     NumberFields(state.form, onEvent)
                 }
@@ -181,9 +192,17 @@ internal fun GymExerciseEditContent(
 @Composable
 private fun NameAndCommentFields(
     form: GymExerciseForm,
+    focusName: Boolean,
     onEvent: (GymExerciseEditEvent) -> Unit,
 ) {
     val nameInvalid = GymField.Name in form
+    // A new exercise is opened to be typed into, so its name takes focus — and with it the
+    // keyboard. An existing one is opened as often to move its day or change its sets, so it keeps
+    // the keyboard down.
+    val nameFocusRequester = remember { FocusRequester() }
+    if (focusName) {
+        LaunchedEffect(Unit) { nameFocusRequester.requestFocus() }
+    }
     OutlinedTextField(
         value = form.name,
         onValueChange = { onEvent(GymExerciseEditEvent.NameChanged(it)) },
@@ -196,7 +215,9 @@ private fun NameAndCommentFields(
         } else {
             null
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(nameFocusRequester),
     )
     Spacer(modifier = Modifier.height(Spacing.xs))
     OutlinedTextField(

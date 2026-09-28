@@ -36,6 +36,8 @@ itself.
 Both go through **one inline editor** in the state, targeting either a new item or
 an existing one. Adding expands a row with name and description fields under the
 "+" control; editing expands the same row in place over the item it belongs to.
+Adding focuses the name field and raises the keyboard straight away — the row was
+opened for nothing but typing. Editing an existing item does not.
 
 Modelling add and edit as two forms meant every change to either had to be made
 twice, so there is one `GroceryEditor` with a `New | Existing(id)` target.

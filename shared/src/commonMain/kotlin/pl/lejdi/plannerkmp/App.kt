@@ -3,6 +3,7 @@ package pl.lejdi.plannerkmp
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
@@ -23,6 +24,7 @@ import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDe
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
@@ -100,28 +102,51 @@ private fun AppContent(koin: Koin) {
         var selectedTabId by rememberSaveable { mutableStateOf(tabs.firstOrNull()?.id) }
         val selectedTabIndex = tabs.indexOfFirst { it.id == selectedTabId }.coerceAtLeast(0)
 
-        val navigators = tabs.map { tab ->
-            key(tab.rootKey) {
-                val backStack = rememberNavBackStack(savedStateConfiguration, tab.rootKey)
-                remember(backStack) { Navigator(backStack) }
-            }
-        }
-
         // Hoisted above the tab switch on purpose:
-        //  - the decorators keep each entry's ViewModelStore and saved state alive rather than
-        //    being rebuilt every time the user changes tab;
         //  - SharedTransitionLayout provides LocalSharedTransitionScope to *every* tab. Providing
         //    it around only one tab left a trap: the entryProvider is shared, so any feature screen
-        //    reachable from another tab would have thrown on reading the local.
+        //    reachable from another tab would have thrown on reading the local;
+        //  - one set of decorators serves every tab. Both key their state by the entry's own
+        //    content key, so two tabs' entries never share a ViewModelStore or saved state.
         val saveableStateHolderDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>()
         val viewModelStoreDecorator = rememberViewModelStoreNavEntryDecorator<NavKey>()
         val entryDecorators = remember(saveableStateHolderDecorator, viewModelStoreDecorator) {
             listOf<NavEntryDecorator<NavKey>>(saveableStateHolderDecorator, viewModelStoreDecorator)
         }
 
+        // Every tab's entries are decorated here, whichever tab is showing, and NavDisplay is handed
+        // only the selected tab's already-decorated list.
+        //
+        // The decorators clear an entry's ViewModelStore and saved state once its key leaves the
+        // back stack *they were decorating*. While NavDisplay took `backStack` directly and the
+        // back stack was swapped on a tab change, every entry of the tab being left counted as
+        // popped: each switch destroyed that tab's ViewModels, and switching back built them again
+        // — a new ViewModel, a new database subscription, a loading frame, then the cross-fade.
+        // Decorated here, a tab's entries stay in their own back stack for as long as the app
+        // runs, and switching back finds them alive and already loaded.
+        val tabEntries = tabs.map { tab ->
+            key(tab.rootKey) {
+                val backStack = rememberNavBackStack(savedStateConfiguration, tab.rootKey)
+                val navigator = remember(backStack) { Navigator(backStack) }
+                val entries = rememberDecoratedNavEntries(
+                    backStack = backStack,
+                    entryDecorators = entryDecorators,
+                    entryProvider = entryProvider,
+                )
+                navigator to entries
+            }
+        }
+
         SharedTransitionLayout {
             CompositionLocalProvider(LocalSharedTransitionScope provides this) {
                 Scaffold(
+                    // None. The bottom bar is all this Scaffold places, and NavigationBar pads
+                    // itself for the system navigation bar. Each feature screen pads its own top
+                    // and sides instead, so the colour behind the status bar is that screen's
+                    // background. At the default this Scaffold pushed its content below the status
+                    // bar, and the band left above every screen was this Scaffold's container
+                    // colour — a white strip over any screen with another background.
+                    contentWindowInsets = WindowInsets(0),
                     bottomBar = {
                         NavigationBar {
                             tabs.forEachIndexed { index, tab ->
@@ -140,31 +165,32 @@ private fun AppContent(koin: Koin) {
                         }
                     },
                 ) { padding ->
-                    val navigator = navigators.getOrNull(selectedTabIndex) ?: return@Scaffold
+                    val (navigator, entries) = tabEntries.getOrNull(selectedTabIndex)
+                        ?: return@Scaffold
                     // `padding` *and* `consumeWindowInsets`, which is the pair Scaffold's own
-                    // contract asks for. Padding alone positions this Box correctly but tells
-                    // nothing below it that the insets are now handled, and every feature screen
-                    // hosts its own Scaffold: each one re-applied the whole of
-                    // `WindowInsets.systemBars`, leaving a band of its container colour above the
-                    // bottom bar that ate the last row of every list. `imePadding()` on the two
-                    // edit forms compounded it — it re-applied the full IME height measured from
-                    // the window bottom, on top of content already lifted clear of it, so on a
-                    // periodic task the interval and date fields were pushed off screen.
+                    // contract asks for. `padding` is the bottom bar alone, and consuming it is what
+                    // makes `imePadding()` on the edit forms lift them by only the part of the
+                    // keyboard the bar does not already cover — and what keeps each feature
+                    // Scaffold from padding its bottom a second time.
                     Box(modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
-                        CompositionLocalProvider(LocalNavigator provides navigator) {
-                            NavDisplay(
-                                backStack = navigator.backStack,
-                                onBack = { navigator.goBack() },
-                                entryDecorators = entryDecorators,
-                                sharedTransitionScope = this@SharedTransitionLayout,
-                                // Matches the shared-element bounds transform. Nav3's own default
-                                // differs per platform, which left a half-faded outgoing screen
-                                // hanging over the FAB on Android.
-                                transitionSpec = { NavAnimation.fade },
-                                popTransitionSpec = { NavAnimation.fade },
-                                predictivePopTransitionSpec = { NavAnimation.fade },
-                                entryProvider = entryProvider,
-                            )
+                        // Keyed by tab, so a tab switch is a fresh NavDisplay showing that tab's top
+                        // entry at once. Unkeyed, the one NavDisplay saw its entries replaced and
+                        // animated from one tab's screen to the other's as if it were navigating,
+                        // cross-fading for the full scene duration on every tap of the bottom bar.
+                        key(tabs[selectedTabIndex].id) {
+                            CompositionLocalProvider(LocalNavigator provides navigator) {
+                                NavDisplay(
+                                    entries = entries,
+                                    onBack = { navigator.goBack() },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    // Matches the shared-element bounds transform. Nav3's own
+                                    // default differs per platform, which left a half-faded
+                                    // outgoing screen hanging over the FAB on Android.
+                                    transitionSpec = { NavAnimation.fade },
+                                    popTransitionSpec = { NavAnimation.fade },
+                                    predictivePopTransitionSpec = { NavAnimation.fade },
+                                )
+                            }
                         }
                     }
                 }

@@ -855,14 +855,19 @@ rather than entities is the same rule as D46, for the same reason.
 
 **Rule.** In the Compose root: one `SharedTransitionLayout`, one set of `entryDecorators` — including
 `rememberViewModelStoreNavEntryDecorator()` and `rememberSaveableStateHolderNavEntryDecorator()` — and a
-`rememberNavBackStack` per tab, all above the tab selection.
+`rememberNavBackStack` plus a `rememberDecoratedNavEntries` per tab, all above the tab selection. The
+`NavDisplay` takes the selected tab's decorated `entries`, never its `backStack`, and is keyed by tab.
 
 **Why.**
 
 - **Without the ViewModel-store decorator every nav entry shares the Activity's `ViewModelStore`**, so
   per-screen ViewModels are neither scoped nor cleared.
-- **Hoisted rather than per tab**, so each entry's `ViewModelStore` and saved state survive a tab change
-  instead of being rebuilt.
+- **Decorated per tab, above the switch**, so each entry's `ViewModelStore` and saved state survive a tab
+  change. Hoisting the decorators alone is not enough: they clear an entry once its key leaves the back
+  stack *they decorated*, so a `NavDisplay` handed a different back stack on each tab change pops every
+  entry of the tab being left, and switching back rebuilds its ViewModels from a loading state.
+- **Keyed by tab**, so a tab switch shows the other tab at once instead of running the scene transition
+  between two unrelated screens.
 - **One `SharedTransitionLayout` for every tab.** Providing the scope around only one tab leaves a trap:
   the `entryProvider` is shared, so any feature screen reachable from another tab throws on reading the
   local.

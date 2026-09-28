@@ -72,6 +72,7 @@ import pl.lejdi.plannerkmp.core.ui.CollectEffects
 import pl.lejdi.plannerkmp.core.ui.components.LoadableContent
 import pl.lejdi.plannerkmp.core.ui.components.MessageHost
 import pl.lejdi.plannerkmp.core.ui.components.PlainTextField
+import pl.lejdi.plannerkmp.core.ui.components.screenWindowInsets
 import pl.lejdi.plannerkmp.core.ui.format.displayName
 import pl.lejdi.plannerkmp.core.ui.format.shortDisplayName
 import pl.lejdi.plannerkmp.core.ui.resources.core_action_retry
@@ -161,6 +162,7 @@ internal fun GymContent(
     val pagerState = rememberPagerState(initialPage = state.today.ordinal) { DayOfWeek.entries.size }
 
     Scaffold(
+        contentWindowInsets = screenWindowInsets,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             // Nothing to add to until the week has loaded.

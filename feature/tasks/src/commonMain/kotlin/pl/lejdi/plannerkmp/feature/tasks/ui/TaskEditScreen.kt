@@ -40,10 +40,13 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -67,6 +70,7 @@ import pl.lejdi.plannerkmp.core.ui.CollectEffects
 import pl.lejdi.plannerkmp.core.ui.components.FieldError
 import pl.lejdi.plannerkmp.core.ui.components.LoadableContent
 import pl.lejdi.plannerkmp.core.ui.components.MessageHost
+import pl.lejdi.plannerkmp.core.ui.components.screenWindowInsets
 import pl.lejdi.plannerkmp.core.ui.format.toFieldString
 import pl.lejdi.plannerkmp.core.ui.format.toPickerDate
 import pl.lejdi.plannerkmp.core.ui.format.toPickerMillis
@@ -177,6 +181,7 @@ internal fun TaskEditContent(
 ) {
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = screenWindowInsets,
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         // The middle arm is the one this screen used to be missing: a failed load left a blank but
@@ -210,7 +215,11 @@ internal fun TaskEditContent(
                         // clipped the overflow — there was no way to reach Save at all.
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    NameAndDescriptionFields(state.form, onEvent)
+                    NameAndDescriptionFields(
+                        form = state.form,
+                        focusName = !state.isEditingExistingTask,
+                        onEvent = onEvent,
+                    )
                     TypeSelector(state.form, onEvent)
                     ScheduleFields(state, onEvent)
                 }
@@ -223,8 +232,19 @@ internal fun TaskEditContent(
 }
 
 @Composable
-private fun NameAndDescriptionFields(form: TaskForm, onEvent: (TaskEditEvent) -> Unit) {
+private fun NameAndDescriptionFields(
+    form: TaskForm,
+    focusName: Boolean,
+    onEvent: (TaskEditEvent) -> Unit,
+) {
     val nameInvalid = TaskField.Name in form
+    // A new task is opened to be typed into, so its name takes focus — and with it the keyboard —
+    // without a second tap. An existing task is opened as often to change its date as its name, so
+    // it keeps the keyboard down.
+    val nameFocusRequester = remember { FocusRequester() }
+    if (focusName) {
+        LaunchedEffect(Unit) { nameFocusRequester.requestFocus() }
+    }
     OutlinedTextField(
         value = form.name,
         onValueChange = { onEvent(TaskEditEvent.NameChanged(it)) },
@@ -237,7 +257,9 @@ private fun NameAndDescriptionFields(form: TaskForm, onEvent: (TaskEditEvent) ->
         } else {
             null
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(nameFocusRequester),
     )
     Spacer(modifier = Modifier.height(Spacing.xs))
     OutlinedTextField(

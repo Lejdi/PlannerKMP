@@ -189,7 +189,14 @@ Modules, declared in `settings.gradle.kts`:
   `single<FeatureTab>` declarations silently override each other. `:shared`'s `App()`
   hoists one `SharedTransitionLayout` and one set of `entryDecorators` (including
   `rememberViewModelStoreNavEntryDecorator()`, without which every nav entry shares the
-  Activity's `ViewModelStore`) above the tab switch, with a `rememberNavBackStack` per tab.
+  Activity's `ViewModelStore`) above the tab switch, with a `rememberNavBackStack` **and a
+  `rememberDecoratedNavEntries`** per tab, and hands a tab-keyed `NavDisplay` the selected
+  tab's already-decorated entries. Handing `NavDisplay` the back stack itself is the trap:
+  the decorators clear an entry once it leaves the back stack they decorated, so swapping
+  back stacks on a tab change destroyed every ViewModel on the tab being left. The root
+  `Scaffold` pads only for the bottom bar (`contentWindowInsets = WindowInsets(0)`), and
+  every feature `Scaffold` passes `:core:ui`'s `screenWindowInsets` — top and sides, never
+  the bottom — so a screen's own background runs behind the status bar.
   Every `NavKey` is `@Serializable` and carries ids, never entities.
 - **`:feature:*`** — one module per user-facing area, each owning its domain model and
   validation, its storage port and `.sq` schema, its screens and ViewModels, its Koin module,

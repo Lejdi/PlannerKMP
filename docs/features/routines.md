@@ -76,7 +76,8 @@ failed reload, which a finished list is not.
 
 One inline editor targeting either a new routine or an existing one, for the
 reason grocery's is one: add and edit are the same form with a different target,
-and modelling them twice means every change has to be made twice.
+and modelling them twice means every change has to be made twice. As in grocery,
+adding focuses the name field and raises the keyboard; editing does not.
 
 If the row is deleted elsewhere while the editor has it open, the save fails with
 `RoutineNoLongerExists`.

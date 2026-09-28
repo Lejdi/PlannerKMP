@@ -32,10 +32,13 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.Role
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.stringResource
@@ -43,6 +46,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import pl.lejdi.plannerkmp.core.ui.components.LoadableContent
 import pl.lejdi.plannerkmp.core.ui.components.MessageHost
 import pl.lejdi.plannerkmp.core.ui.components.PlainTextField
+import pl.lejdi.plannerkmp.core.ui.components.screenWindowInsets
 import pl.lejdi.plannerkmp.core.ui.resources.core_action_cancel
 import pl.lejdi.plannerkmp.core.ui.resources.core_action_retry
 import pl.lejdi.plannerkmp.core.ui.resources.core_action_undo
@@ -108,7 +112,10 @@ internal fun GroceryListContent(
     snackbarHostState: SnackbarHostState,
     onEvent: (GroceryListEvent) -> Unit,
 ) {
-    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
+    Scaffold(
+        contentWindowInsets = screenWindowInsets,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { padding ->
         LoadableContent(
             isLoading = state.isLoading,
             hasTerminalLoadFailure = state.hasTerminalLoadFailure,
@@ -180,7 +187,7 @@ private fun AddControl(
 ) {
     Column(modifier = Modifier.padding(bottom = Spacing.lg).animateContentSize()) {
         if (editor != null && editor.target == EditorTarget.New) {
-            InlineEditCard(editor = editor, canSubmit = canSubmit, onEvent = onEvent)
+            InlineEditCard(editor = editor, canSubmit = canSubmit, onEvent = onEvent, focusName = true)
         } else {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 FloatingActionButton(
@@ -199,7 +206,14 @@ private fun InlineEditCard(
     editor: GroceryEditor,
     canSubmit: Boolean,
     onEvent: (GroceryListEvent) -> Unit,
+    focusName: Boolean = false,
 ) {
+    // The add button opens this card for nothing but typing, so its name field takes focus — and
+    // the keyboard with it — rather than waiting for a second tap on an empty line.
+    val nameFocusRequester = remember { FocusRequester() }
+    if (focusName) {
+        LaunchedEffect(Unit) { nameFocusRequester.requestFocus() }
+    }
     Card(
         colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.secondaryContainer),
     ) {
@@ -220,6 +234,7 @@ private fun InlineEditCard(
                     textStyle = MaterialTheme.typography.itemTitle,
                     placeholder = stringResource(Res.string.grocery_field_name),
                     isError = editor.nameError,
+                    modifier = Modifier.focusRequester(nameFocusRequester),
                 )
                 Spacer(modifier = Modifier.height(Spacing.sm))
                 PlainTextField(

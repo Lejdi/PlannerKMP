@@ -141,7 +141,9 @@ splits `updateDetails` from `updateCompletedOn` for exactly this reason.
 ## The edit form
 
 Reached by long press **or** the edit icon — two affordances, one intent. Adding
-from a page creates the exercise on **that page's weekday**.
+from a page creates the exercise on **that page's weekday**, and opens with the
+name field focused and the keyboard up; editing an existing exercise opens with the
+keyboard down, since it is as often opened to move its day or change its sets.
 
 The form observes its row rather than reading it once, seeds itself from the first
 emission only, and uses the subscription to notice the row being deleted

@@ -161,6 +161,9 @@ is now driven by the date changing rather than by a screen being opened.
 
 ## The edit form
 
+- A new task opens with the name field focused and the keyboard up. An existing
+  task opens with the keyboard down: it is as often opened to change its date as
+  its name.
 - The three types toggle which inputs are shown: ASAP shows none of start date /
   end date / interval; Specific day shows start date and hour; Periodic shows
   start date, hour, end date and interval.
