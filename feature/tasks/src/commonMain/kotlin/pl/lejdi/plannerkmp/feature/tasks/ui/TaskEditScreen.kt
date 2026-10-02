@@ -48,6 +48,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -401,6 +403,8 @@ private fun ColumnScope.ScheduleFields(state: TaskEditState, onEvent: (TaskEditE
 
 @Composable
 private fun ActionRow(state: TaskEditState, onEvent: (TaskEditEvent) -> Unit) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.xxl),
         horizontalArrangement = if (state.isEditingExistingTask) {
@@ -421,7 +425,14 @@ private fun ActionRow(state: TaskEditState, onEvent: (TaskEditEvent) -> Unit) {
             }
         }
         Button(
-            onClick = { onEvent(TaskEditEvent.SaveClicked) },
+            onClick = {
+                // Dismissed before the event, not by the navigation it leads to: left to the
+                // focused field leaving composition, the keyboard stayed up over the Dashboard
+                // and only closed once the transition had already run.
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onEvent(TaskEditEvent.SaveClicked)
+            },
             enabled = state.canSubmit,
         ) {
             Text(stringResource(Res.string.tasks_action_save))
