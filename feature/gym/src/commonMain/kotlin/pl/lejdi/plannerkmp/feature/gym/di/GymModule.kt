@@ -19,6 +19,7 @@ import pl.lejdi.plannerkmp.feature.gym.GymNavEntryProviderContributor
 import pl.lejdi.plannerkmp.feature.gym.GymNavKeySerializersContributor
 import pl.lejdi.plannerkmp.feature.gym.data.DayOfWeekColumnAdapter
 import pl.lejdi.plannerkmp.feature.gym.data.GymDatabase
+import pl.lejdi.plannerkmp.feature.gym.data.GymExerciseDay
 import pl.lejdi.plannerkmp.feature.gym.data.GymExerciseEntity
 import pl.lejdi.plannerkmp.feature.gym.data.LocalDateColumnAdapter
 import pl.lejdi.plannerkmp.feature.gym.data.SqlDelightGymDatasource
@@ -38,10 +39,8 @@ val gymModule = module {
     single {
         GymDatabase(
             get(named(GYM_DRIVER)),
-            gymExerciseEntityAdapter = GymExerciseEntity.Adapter(
-                dayOfWeekAdapter = DayOfWeekColumnAdapter,
-                completedOnAdapter = LocalDateColumnAdapter,
-            ),
+            gymExerciseDayAdapter = GymExerciseDay.Adapter(dayOfWeekAdapter = DayOfWeekColumnAdapter),
+            gymExerciseEntityAdapter = GymExerciseEntity.Adapter(completedOnAdapter = LocalDateColumnAdapter),
         )
     }
     single { get<GymDatabase>().gymExerciseEntityQueries }

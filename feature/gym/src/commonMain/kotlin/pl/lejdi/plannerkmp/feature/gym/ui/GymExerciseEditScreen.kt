@@ -43,6 +43,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import pl.lejdi.plannerkmp.core.ui.CollectEffects
+import pl.lejdi.plannerkmp.core.ui.components.FieldError
 import pl.lejdi.plannerkmp.core.ui.components.LoadableContent
 import pl.lejdi.plannerkmp.core.ui.components.MessageHost
 import pl.lejdi.plannerkmp.core.ui.components.screenWindowInsets
@@ -56,6 +57,7 @@ import pl.lejdi.plannerkmp.feature.gym.domain.GymField
 import pl.lejdi.plannerkmp.feature.gym.resources.Res
 import pl.lejdi.plannerkmp.feature.gym.resources.gym_delete_message
 import pl.lejdi.plannerkmp.feature.gym.resources.gym_delete_title
+import pl.lejdi.plannerkmp.feature.gym.resources.gym_error_days_empty
 import pl.lejdi.plannerkmp.feature.gym.resources.gym_error_delete_failed
 import pl.lejdi.plannerkmp.feature.gym.resources.gym_error_exercise_gone
 import pl.lejdi.plannerkmp.feature.gym.resources.gym_error_load_failed
@@ -197,8 +199,8 @@ private fun NameAndCommentFields(
 ) {
     val nameInvalid = GymField.Name in form
     // A new exercise is opened to be typed into, so its name takes focus — and with it the
-    // keyboard. An existing one is opened as often to move its day or change its sets, so it keeps
-    // the keyboard down.
+    // keyboard. An existing one is opened as often to change its days or its sets, so it keeps the
+    // keyboard down.
     val nameFocusRequester = remember { FocusRequester() }
     if (focusName) {
         LaunchedEffect(Unit) { nameFocusRequester.requestFocus() }
@@ -230,14 +232,14 @@ private fun NameAndCommentFields(
 }
 
 /**
- * Which weekday the exercise sits on — and the only way to move it, since an exercise belongs to
- * exactly one day.
+ * Which weekdays the exercise is planned on — any number of them, but at least one.
  *
- * Chips rather than a dropdown: seven options that all fit, and the same short weekday names the
+ * Chips rather than a dropdown: seven toggles that all fit, and the same short weekday names the
  * list screen's peek row uses, so the two read as the same week.
  */
 @Composable
 private fun WeekdaySelector(form: GymExerciseForm, onEvent: (GymExerciseEditEvent) -> Unit) {
+    val daysInvalid = GymField.Days in form
     Column(modifier = Modifier.padding(top = Spacing.sm)) {
         Text(
             text = stringResource(Res.string.gym_form_weekday),
@@ -248,17 +250,17 @@ private fun WeekdaySelector(form: GymExerciseForm, onEvent: (GymExerciseEditEven
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             DayOfWeek.entries.forEach { weekday ->
-                // It opens nothing and types nothing — it is a choice — so it carries its own
-                // description and button role rather than leaving a three-letter label to explain
-                // itself to a screen reader.
+                // It opens nothing and types nothing — it is an on/off choice — so it carries its
+                // own description and checkbox role rather than leaving a three-letter label to
+                // explain itself to a screen reader.
                 val label = stringResource(Res.string.gym_form_pick_day, weekday.displayName())
                 FilterChip(
-                    selected = form.dayOfWeek == weekday,
-                    onClick = { onEvent(GymExerciseEditEvent.DayOfWeekChanged(weekday)) },
+                    selected = weekday in form.days,
+                    onClick = { onEvent(GymExerciseEditEvent.DayToggled(weekday)) },
                     modifier = Modifier
                         .weight(1f)
                         .semantics {
-                            role = Role.Button
+                            role = Role.Checkbox
                             contentDescription = label
                         },
                     label = {
@@ -272,6 +274,9 @@ private fun WeekdaySelector(form: GymExerciseForm, onEvent: (GymExerciseEditEven
                     },
                 )
             }
+        }
+        if (daysInvalid) {
+            FieldError(text = stringResource(Res.string.gym_error_days_empty))
         }
     }
 }

@@ -1,12 +1,15 @@
--- dayOfWeek is what an exercise belongs to, rather than a date: the plan repeats every week, so
--- there is no row per date, no history table, and nothing that has to run overnight for this
--- screen to be right in the morning.
+-- An exercise is planned on a *set* of weekdays rather than on a date: the plan repeats every week,
+-- so there is no row per date, no history table, and nothing that has to run overnight for this
+-- screen to be right in the morning. The weekdays live in gymExerciseDay below, one row each, so an
+-- exercise done on Monday and Thursday is still one row here — one weight, edited once.
 --
 -- completedSets/completedOn are the pair that makes the daily reset free — the number of series
 -- ticked, and the date they were ticked on. "Done today" is therefore
 -- `completedOn == today && completedSets >= setsCount`, evaluated against a live clock in
--- ObserveGymWeek rather than read out of storage. This is the convention routineEntity already
--- follows, and the reason neither table grows without bound.
+-- ObserveGymWeek rather than read out of storage. One pair per exercise is enough across several
+-- weekdays too: a date falls on exactly one weekday, so a tick can only ever belong to one page.
+-- This is the convention routineEntity already follows, and the reason neither table grows without
+-- bound.
 --
 -- The three counts are plain INTEGER rather than `AS Int`: that annotation needs IntColumnAdapter
 -- from app.cash.sqldelight:primitive-adapters, which this build does not depend on, and
@@ -16,7 +19,6 @@ CREATE TABLE gymExerciseEntity (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     comment TEXT,
-    dayOfWeek INTEGER AS kotlinx.datetime.DayOfWeek NOT NULL,
     setsCount INTEGER NOT NULL,
     repsPerSet INTEGER NOT NULL,
     weight REAL,
@@ -24,21 +26,57 @@ CREATE TABLE gymExerciseEntity (
     completedOn TEXT AS kotlinx.datetime.LocalDate
 );
 
--- Ordered explicitly, and by dayOfWeek first. Nothing sorts this list downstream, and a bare
--- SELECT * returns rows in whatever order the query planner finds convenient — SQLite usually
--- gives rowid order for a plain table scan but does not promise to, and stops doing so after a
--- VACUUM. The ISO day number is stored precisely so that this comes out in calendar order.
+-- Which weekdays each exercise is planned on. The pair is the key, so a day cannot be listed twice.
+--
+-- No REFERENCES clause: neither driver turns `PRAGMA foreign_keys` on, so a declared cascade would
+-- be a promise SQLite does not keep. The datasource deletes an exercise's days in the same
+-- transaction as the exercise instead.
+CREATE TABLE gymExerciseDay (
+    exerciseId INTEGER NOT NULL,
+    dayOfWeek INTEGER AS kotlinx.datetime.DayOfWeek NOT NULL,
+    PRIMARY KEY (exerciseId, dayOfWeek)
+);
+
+-- One row per (exercise, weekday) pair, ordered explicitly: nothing sorts this list downstream, and
+-- a bare SELECT returns rows in whatever order the query planner finds convenient. By id first, so
+-- each exercise's days arrive together and the datasource folds them in one pass — and within a
+-- page that is the order exercises were added in, as before. The ISO day number is stored
+-- precisely so that the days come out in calendar order.
+--
+-- One query over both tables rather than two flows combined: SQLDelight re-runs a join when either
+-- table changes, while two separate queries could each emit between the writes of one transaction
+-- and pair an exercise with a stale set of days.
 selectAll:
-SELECT * FROM gymExerciseEntity ORDER BY dayOfWeek, id;
+SELECT gymExerciseEntity.*, gymExerciseDay.dayOfWeek
+FROM gymExerciseEntity
+JOIN gymExerciseDay ON gymExerciseDay.exerciseId = gymExerciseEntity.id
+ORDER BY gymExerciseEntity.id, gymExerciseDay.dayOfWeek;
 
 selectById:
-SELECT * FROM gymExerciseEntity WHERE id = :id;
+SELECT gymExerciseEntity.*, gymExerciseDay.dayOfWeek
+FROM gymExerciseEntity
+JOIN gymExerciseDay ON gymExerciseDay.exerciseId = gymExerciseEntity.id
+WHERE gymExerciseEntity.id = :id
+ORDER BY gymExerciseDay.dayOfWeek;
 
 insert:
-INSERT INTO gymExerciseEntity(name, comment, dayOfWeek, setsCount, repsPerSet, weight)
-VALUES (:name, :comment, :dayOfWeek, :setsCount, :repsPerSet, :weight);
+INSERT INTO gymExerciseEntity(name, comment, setsCount, repsPerSet, weight)
+VALUES (:name, :comment, :setsCount, :repsPerSet, :weight);
 
--- Every column the form owns, deliberately not the completion pair.
+-- The id the insert above just assigned, read inside the same transaction so it cannot be another's.
+lastInsertRowId:
+SELECT last_insert_rowid();
+
+insertDay:
+INSERT INTO gymExerciseDay(exerciseId, dayOfWeek) VALUES (:exerciseId, :dayOfWeek);
+
+-- Replacing the days is delete-then-insert: diffing the old set against the new one would mean
+-- reading it first, which is the read-modify-write updateDetails exists to avoid.
+deleteDays:
+DELETE FROM gymExerciseDay WHERE exerciseId = :exerciseId;
+
+-- Every column the form owns, deliberately not the completion pair. The weekdays are the form's too,
+-- and the datasource rewrites them in the same transaction — see deleteDays.
 --
 -- Three writers touch an exercise and none of them has read what the others wrote: the form owns
 -- the text and the numbers, the inline editor on the list row owns the weight, and the checkboxes
@@ -48,12 +86,13 @@ VALUES (:name, :comment, :dayOfWeek, :setsCount, :repsPerSet, :weight);
 -- between `update` and `updateSchedule`, for the same reason.
 updateDetails:
 UPDATE gymExerciseEntity
-SET name = :name, comment = :comment, dayOfWeek = :dayOfWeek, setsCount = :setsCount,
-    repsPerSet = :repsPerSet, weight = :weight
+SET name = :name, comment = :comment, setsCount = :setsCount, repsPerSet = :repsPerSet,
+    weight = :weight
 WHERE id = :id;
 
 -- The weight alone, for the inline editor on the list row. It holds no copy of the other columns,
--- so it cannot push a stale one.
+-- so it cannot push a stale one. One row however many weekdays the exercise is on, which is what
+-- the separate day table is for: the weight edited on Monday's page is the weight Thursday's shows.
 updateWeight:
 UPDATE gymExerciseEntity SET weight = :weight WHERE id = :id;
 

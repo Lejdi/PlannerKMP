@@ -7,14 +7,14 @@ import pl.lejdi.plannerkmp.core.common.DomainError
 import pl.lejdi.plannerkmp.core.common.ValidationField
 
 /** The inputs of the exercise form, for [DomainError.Validation] to point at. */
-enum class GymField : ValidationField { Name, Sets, Reps, Weight }
+enum class GymField : ValidationField { Name, Days, Sets, Reps, Weight }
 
 /** An unsaved exercise, and the only way to build a valid one. */
 @ConsistentCopyVisibility
 data class GymExerciseDraft private constructor(
     val name: String,
     val comment: String?,
-    val dayOfWeek: DayOfWeek,
+    val days: Set<DayOfWeek>,
     val setsCount: Int,
     val repsPerSet: Int,
     val weight: Double?,
@@ -40,14 +40,14 @@ data class GymExerciseDraft private constructor(
         internal fun ofStored(
             name: String,
             comment: String?,
-            dayOfWeek: DayOfWeek,
+            days: Set<DayOfWeek>,
             setsCount: Int,
             repsPerSet: Int,
             weight: Double?,
         ) = GymExerciseDraft(
             name = name,
             comment = comment,
-            dayOfWeek = dayOfWeek,
+            days = days,
             setsCount = setsCount,
             repsPerSet = repsPerSet,
             weight = weight,
@@ -65,7 +65,7 @@ data class GymExerciseDraft private constructor(
         fun create(
             name: String,
             comment: String?,
-            dayOfWeek: DayOfWeek,
+            days: Set<DayOfWeek>,
             setsCount: Int?,
             repsPerSet: Int?,
             weight: Double?,
@@ -74,6 +74,9 @@ data class GymExerciseDraft private constructor(
             val validReps = repsPerSet?.takeIf { it in 1..MAX_REPS }
             val invalid = buildSet<ValidationField> {
                 if (name.isBlank()) add(GymField.Name)
+                // An exercise on no day would be on no page: stored, and unreachable to edit or
+                // delete. "Take it out of the plan" is what Delete is for.
+                if (days.isEmpty()) add(GymField.Days)
                 if (validSets == null) add(GymField.Sets)
                 if (validReps == null) add(GymField.Reps)
                 if (!isWeightValid(weight)) add(GymField.Weight)
@@ -83,7 +86,7 @@ data class GymExerciseDraft private constructor(
                 GymExerciseDraft(
                     name = name.trim(),
                     comment = comment?.trim()?.takeIf { it.isNotEmpty() },
-                    dayOfWeek = dayOfWeek,
+                    days = days,
                     // Non-null here: an absent or out-of-range count is already in `invalid` above,
                     // and that branch has returned.
                     setsCount = requireNotNull(validSets),
@@ -109,13 +112,15 @@ data class GymExerciseDraft private constructor(
 /**
  * An exercise that exists in storage; [id] is real, never a `0L` stand-in for "unsaved".
  *
- * [dayOfWeek] is what the exercise belongs to, rather than a date: the plan repeats every week, so
- * there is no row per date and no history to accumulate.
+ * [days] are the weekdays it is planned on — never empty — rather than dates: the plan repeats
+ * every week, so there is no row per date and no history to accumulate. It is one exercise however
+ * many days it is on, which is what makes a weight edited on one page the weight every page shows.
  *
  * [completedSets] is how many series were ticked *on [completedOn]* — the last date anything was
  * ticked here, `null` if nothing ever was. Neither is a boolean and neither is a row per day:
  * "done" is a question about today, and today is not a property of the row. [DayExercise] is where
- * that question gets answered, against a live clock.
+ * that question gets answered, against a live clock. One pair serves every one of [days], because a
+ * date falls on exactly one weekday: a tick made today can only ever show on today's page.
  *
  * `internal` constructor for the same reason [GymExerciseDraft]'s is private: otherwise "the only
  * way to build a valid one" would hold for the draft and not for the type every other layer
@@ -126,7 +131,7 @@ data class GymExercise internal constructor(
     val id: Long,
     val name: String,
     val comment: String?,
-    val dayOfWeek: DayOfWeek,
+    val days: Set<DayOfWeek>,
     val setsCount: Int,
     val repsPerSet: Int,
     val weight: Double?,

@@ -28,10 +28,10 @@ import pl.lejdi.plannerkmp.feature.gym.domain.GymField
  *
  * @param initialExerciseId seeds the state and nothing else. The id the screen *works from* is
  *   `state.exerciseId` throughout.
- * @param initialDayOfWeek the page a *new* exercise was added from, and null when editing an
- *   existing one — which takes its weekday from the row it loads, the only value that could be
- *   right after the exercise has been moved. Null rather than an arbitrary weekday nobody reads:
- *   the form's own default is then the single place a fallback lives.
+ * @param initialDayOfWeek the page a *new* exercise was added from, and so its first day; null when
+ *   editing an existing one, which takes its weekdays from the row it loads — the only value that
+ *   could be right after its days have been changed. Null rather than an arbitrary weekday nobody
+ *   reads: the form's own default is then the single place a fallback lives.
  */
 class GymExerciseEditViewModel(
     private val initialExerciseId: Long?,
@@ -54,7 +54,7 @@ class GymExerciseEditViewModel(
         isLoading = initialExerciseId != null,
         exerciseId = initialExerciseId,
         // Without a seed the form keeps its own default, which the stored row then overwrites.
-        form = initialDayOfWeek?.let { GymExerciseForm(dayOfWeek = it) } ?: GymExerciseForm(),
+        form = initialDayOfWeek?.let { GymExerciseForm(days = setOf(it)) } ?: GymExerciseForm(),
     )
 
     override fun captureInput(state: GymExerciseEditState) = GymExerciseEditInput(
@@ -86,7 +86,10 @@ class GymExerciseEditViewModel(
                 copy(name = event.value).withoutError(GymField.Name)
             }
             is GymExerciseEditEvent.CommentChanged -> updateForm { copy(comment = event.value) }
-            is GymExerciseEditEvent.DayOfWeekChanged -> updateForm { copy(dayOfWeek = event.value) }
+            is GymExerciseEditEvent.DayToggled -> updateForm {
+                val days = if (event.value in days) days - event.value else days + event.value
+                copy(days = days).withoutError(GymField.Days)
+            }
             is GymExerciseEditEvent.SetsCountChanged -> updateForm {
                 copy(setsCount = event.value).withoutError(GymField.Sets)
             }
@@ -167,7 +170,7 @@ class GymExerciseEditViewModel(
         val draftResult = GymExerciseDraft.create(
             name = form.name,
             comment = form.comment,
-            dayOfWeek = form.dayOfWeek,
+            days = form.days,
             setsCount = form.setsCount.trim().toIntOrNull(),
             repsPerSet = form.repsPerSet.trim().toIntOrNull(),
             weight = weight,
@@ -252,7 +255,7 @@ private fun GymExerciseEditState.seededFrom(exercise: GymExercise): GymExerciseE
     form = form.copy(
         name = exercise.name,
         comment = exercise.comment.orEmpty(),
-        dayOfWeek = exercise.dayOfWeek,
+        days = exercise.days,
         setsCount = exercise.setsCount.toString(),
         repsPerSet = exercise.repsPerSet.toString(),
         weight = exercise.weight.toWeightText(),

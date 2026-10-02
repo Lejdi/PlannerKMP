@@ -384,10 +384,13 @@ internal fun DayPage(
             items(day.exercises, key = { it.id }) { exercise ->
                 ExerciseCard(
                     exercise = exercise,
+                    dayOfWeek = day.dayOfWeek,
                     // Only today's page can be ticked: a tick is stamped with today's date, so one
                     // made here on another weekday would show up on today's page instead.
                     isToday = isToday,
-                    weightEditor = state.weightEditor?.takeIf { it.exerciseId == exercise.id },
+                    weightEditor = state.weightEditor?.takeIf {
+                        it.exerciseId == exercise.id && it.dayOfWeek == day.dayOfWeek
+                    },
                     canSubmit = !state.isPending(exercise.id),
                     onEvent = onEvent,
                 )
@@ -400,6 +403,7 @@ internal fun DayPage(
 @Composable
 private fun ExerciseCard(
     exercise: DayExercise,
+    dayOfWeek: DayOfWeek,
     isToday: Boolean,
     weightEditor: WeightEditor?,
     canSubmit: Boolean,
@@ -457,6 +461,7 @@ private fun ExerciseCard(
                 )
                 WeightControl(
                     exercise = exercise,
+                    dayOfWeek = dayOfWeek,
                     editor = weightEditor,
                     onEvent = onEvent,
                 )
@@ -482,6 +487,7 @@ private fun ExerciseCard(
 @Composable
 private fun WeightControl(
     exercise: DayExercise,
+    dayOfWeek: DayOfWeek,
     editor: WeightEditor?,
     onEvent: (GymEvent) -> Unit,
 ) {
@@ -540,7 +546,7 @@ private fun WeightControl(
                 contentDescription = weightLabel
             }
             .combinedClickable(
-                onClick = { onEvent(GymEvent.WeightEditStarted(exercise.id)) },
+                onClick = { onEvent(GymEvent.WeightEditStarted(exercise.id, dayOfWeek)) },
                 onClickLabel = weightLabel,
             )
             .padding(horizontal = Spacing.sm, vertical = Spacing.xs),

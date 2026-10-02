@@ -8,11 +8,18 @@ new to the KMP version.
 
 ## Domain model
 
-An exercise is an id, a name, an optional comment, a weekday, a series count, reps
-per series, an optional weight, and the completion pair.
+An exercise is an id, a name, an optional comment, a set of weekdays, a series
+count, reps per series, an optional weight, and the completion pair.
 
-**An exercise belongs to a `DayOfWeek`, not to a date.** The seven pages repeat
-every week; there is no row per date and no history table.
+**An exercise is planned on a set of `DayOfWeek`s, not on dates.** The seven pages
+repeat every week; there is no row per date and no history table.
+
+- The set is **never empty** — an exercise on no day would be on no page, and so
+  out of reach of Edit and Delete alike. Taking it out of the plan is Delete.
+- It is **one exercise however many days it is on**. Squats on Monday and
+  Thursday are one row with one weight, so a weight changed on either page is the
+  weight both show. That is the whole reason the days are a set rather than a
+  copy of the exercise per day.
 
 - `weight` is **optional, and null means bodyweight** — not a missing value. It is
   rendered as such rather than as a blank number.
@@ -28,6 +35,7 @@ every week; there is no row per date and no history table.
 reports **every** offending field at once (`GymField`):
 
 - `Name` — required, non-blank, saved trimmed.
+- `Days` — at least one weekday.
 - `Sets` — required, `1..MAX_SETS`.
 - `Reps` — required, `1..MAX_REPS`.
 - `Weight` — optional; when present, `0.0..MAX_WEIGHT`.
@@ -48,8 +56,16 @@ range" are the same failure to the user, and so the same field.
 
 ## The daily reset is derived, not stored
 
-`doneSets` is `completedSets` when `completedOn` is today, and zero otherwise —
-recomputed on every write to the table *and* at every local midnight.
+`doneSets` is `completedSets` when `completedOn` is today **and the page is
+today's weekday**, and zero otherwise — recomputed on every write to the tables
+*and* at every local midnight.
+
+The weekday half is what an exercise on several days needs. Its single completion
+pair is shared by every page it appears on, and one pair is enough: a date falls on
+exactly one weekday, so a tick made today belongs to today's page and no other.
+Without the check, ticking Monday's squats would also show Thursday's squats as
+done, whenever Thursday's page is looked at on a Monday. On Thursday itself the
+date no longer matches and the card starts from zero, as a new day should.
 
 So, exactly as in `:feature:routines`, **there is no cleanup job and nothing to
 run overnight**. The date stops matching by itself.
@@ -85,6 +101,11 @@ with nothing done carries no date to compare against.
 A tick is stamped with today's date, so one made on another weekday's page would
 be recorded as done today and would appear on the wrong page.
 
+For the same reason a tick is planned from **today's** card of the exercise, not
+from whichever of its cards comes first in the week: every other card reports zero
+done, and planning from one would count up from nothing. An exercise not planned
+today has no today's card, and so nothing to tick.
+
 Other days show the same cards **as a plan** — still weight-editable, still
 long-pressable to edit — just without the series checkboxes. The pager always
 opens on today, so the state no layout hints at (a page showing a plan *without*
@@ -115,7 +136,14 @@ the form — changing the load is the thing you do at the gym, between sets, and
 sending it through the whole edit screen would be disproportionate.
 
 One editor for the whole screen rather than a flag per row: only one field can
-hold focus, so a set of open editors would be a state the UI cannot represent.
+hold focus, so a set of open editors would be a state the UI cannot represent. The
+editor records the **page** it was opened on as well as the exercise — an
+exercise on several days has a card on each of their pages, and the pager composes
+a neighbour while it is swiped to, so an editor keyed by the exercise alone opened
+on every one of its cards at once.
+
+The weight is the exercise's, not the page's: committing it on Monday's card
+changes it on every day the exercise is planned.
 
 Committing an out-of-range or unparseable value is rejected with `WeightInvalid`
 and the field stays open, marked, until the text changes.
@@ -126,7 +154,7 @@ Three writers touch an exercise and **none has read what the others wrote**:
 
 | Writer | Owns |
 | --- | --- |
-| `updateDetails` | everything the edit form holds — name, comment, weekday, counts, weight |
+| `updateDetails` | everything the edit form holds — name, comment, weekdays, counts, weight |
 | `updateWeight` | the weight only, for the inline editor on the list row |
 | `updateCompletedSets` | the completion pair only, for the checkboxes |
 
@@ -138,12 +166,29 @@ success.
 `:feature:tasks` splits `editTask` from `rescheduleTask` and `:feature:routines`
 splits `updateDetails` from `updateCompletedOn` for exactly this reason.
 
+## Storage
+
+The weekdays live in their own table, `gymExerciseDay` — one row per (exercise,
+weekday), the pair as its key — and the exercise row holds everything else. Both
+queries the screens observe are one join over the two tables, so SQLDelight re-runs
+them when either changes, and no observer can pair an exercise with a stale set of
+days. Every write that touches the days runs in one transaction with the exercise
+row: there is no foreign key to cascade a delete (neither driver enables them), and
+an exercise with no day rows would vanish from the join.
+
+Version 1 stored one `dayOfWeek` column on the exercise. Migration `1.sqm` gives
+every existing exercise exactly that day as its only row in `gymExerciseDay`, and
+keeps its id, its weight and today's ticks.
+
 ## The edit form
 
 Reached by long press **or** the edit icon — two affordances, one intent. Adding
-from a page creates the exercise on **that page's weekday**, and opens with the
+from a page starts the exercise on **that page's weekday**, and opens with the
 name field focused and the keyboard up; editing an existing exercise opens with the
-keyboard down, since it is as often opened to move its day or change its sets.
+keyboard down, since it is as often opened to change its days or its sets.
+
+The weekdays are seven toggles: tapping a day adds it or takes it off. Saving with
+none selected marks the field rather than writing.
 
 The form observes its row rather than reading it once, seeds itself from the first
 emission only, and uses the subscription to notice the row being deleted

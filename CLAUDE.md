@@ -209,7 +209,7 @@ Modules, declared in `settings.gradle.kts`:
   | `:feature:tasks` | `Task`/`TaskDraft`/`TaskSchedule`/`TaskType`/`TaskField`, `TasksDatasource`, `taskEntity`, `ObserveTasksForDashboard`, `MarkTaskComplete`, `UpdateTasksDates`, `TasksCleanupInitializer` | [tasks.md](docs/features/tasks.md) |
   | `:feature:grocery` | `GroceryItem`/`GroceryItemDraft`/`GroceryField`, `GroceryDatasource`, `groceryItemEntity` | [grocery.md](docs/features/grocery.md) |
   | `:feature:routines` | `Routine`/`RoutineDraft`/`TodayRoutine`/`RoutineField`, `RoutinesDatasource`, `routineEntity`, `ObserveRoutinesForToday`, `ToggleRoutineDone` | [routines.md](docs/features/routines.md) |
-  | `:feature:gym` | `GymExercise`/`GymExerciseDraft`/`DayExercise`/`GymDay`/`GymField`, `GymDatasource`, `gymExerciseEntity`, `ObserveGymWeek`, `ToggleExerciseSet` | [gym.md](docs/features/gym.md) |
+  | `:feature:gym` | `GymExercise`/`GymExerciseDraft`/`DayExercise`/`GymDay`/`GymField`, `GymDatasource`, `gymExerciseEntity`/`gymExerciseDay`, `ObserveGymWeek`, `ToggleExerciseSet` | [gym.md](docs/features/gym.md) |
 
   `:feature:tasks` is the one feature with an `AppInitializer`; the other three need no
   overnight job at all, for the reason *Derive against the clock* below gives.

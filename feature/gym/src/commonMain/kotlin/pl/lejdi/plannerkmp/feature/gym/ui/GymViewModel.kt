@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DayOfWeek
 import pl.lejdi.plannerkmp.core.common.AppResult
 import pl.lejdi.plannerkmp.core.common.DomainError
 import pl.lejdi.plannerkmp.core.common.Logger
@@ -52,7 +53,7 @@ class GymViewModel(
     override fun onEvent(event: GymEvent) {
         when (event) {
             is GymEvent.SerieToggled -> toggleSerie(event.exerciseId, event.serieNumber)
-            is GymEvent.WeightEditStarted -> startWeightEdit(event.exerciseId)
+            is GymEvent.WeightEditStarted -> startWeightEdit(event.exerciseId, event.dayOfWeek)
             is GymEvent.WeightTextChanged -> setState {
                 // Clearing the mark as soon as the text moves: leaving it set means the field goes
                 // on looking wrong while the user is fixing it.
@@ -98,21 +99,22 @@ class GymViewModel(
     /**
      * Resolved from the state the screen is observing rather than taken from the event, so the
      * count this tick is planned from is the one the data layer last emitted. A row that has gone
-     * in the meantime simply has nothing to tick.
+     * in the meantime — or been taken off today — simply has nothing to tick.
      */
     private fun toggleSerie(exerciseId: Long, serieNumber: Int) {
-        val exercise = state.value.findExercise(exerciseId) ?: return
+        val exercise = state.value.findTodayExercise(exerciseId) ?: return
         write(exerciseId, GymMessage.ToggleFailed) {
             toggleExerciseSet(ToggleExerciseSet.Params(exercise, serieNumber))
         }
     }
 
-    private fun startWeightEdit(exerciseId: Long) {
+    private fun startWeightEdit(exerciseId: Long, dayOfWeek: DayOfWeek) {
         val exercise = state.value.findExercise(exerciseId) ?: return
         setState {
             copy(
                 weightEditor = WeightEditor(
                     exerciseId = exerciseId,
+                    dayOfWeek = dayOfWeek,
                     text = exercise.exercise.weight.toWeightText(),
                 ),
             )

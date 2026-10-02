@@ -31,7 +31,7 @@ class GymExerciseEditViewModelTest {
         id = 1L,
         name = "Bench press",
         comment = "slow eccentric",
-        dayOfWeek = DayOfWeek.MONDAY,
+        days = setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY),
         setsCount = 4,
         repsPerSet = 8,
         weight = 60.0,
@@ -82,7 +82,7 @@ class GymExerciseEditViewModelTest {
         assertFalse(state.isLoading)
         assertFalse(state.isEmpty)
         assertFalse(state.isEditingExisting)
-        assertEquals(DayOfWeek.THURSDAY, state.form.dayOfWeek)
+        assertEquals(setOf(DayOfWeek.THURSDAY), state.form.days)
         assertEquals("", state.form.name)
     }
 
@@ -94,7 +94,7 @@ class GymExerciseEditViewModelTest {
         val form = viewModel.state.value.form
         assertEquals("Bench press", form.name)
         assertEquals("slow eccentric", form.comment)
-        assertEquals(DayOfWeek.MONDAY, form.dayOfWeek)
+        assertEquals(setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY), form.days)
         assertEquals("4", form.setsCount)
         assertEquals("8", form.repsPerSet)
         assertEquals("60", form.weight, "the weight is shown as 60, not 60.0")
@@ -103,16 +103,16 @@ class GymExerciseEditViewModelTest {
     }
 
     /**
-     * Editing passes no weekday — the row carries the only correct one, which is the reason the
+     * Editing passes no weekday — the row carries the only correct ones, which is the reason the
      * nav key for an edit does not have the field at all.
      */
     @Test
-    fun anEditWithoutASeedTakesTheWeekdayFromTheRow() = runTest {
-        val stored = exercise(id = 1L, dayOfWeek = DayOfWeek.SATURDAY)
+    fun anEditWithoutASeedTakesTheWeekdaysFromTheRow() = runTest {
+        val stored = exercise(id = 1L, days = setOf(DayOfWeek.SATURDAY))
         val viewModel = viewModel(FakeGymDatasource(listOf(stored)), exerciseId = 1L, dayOfWeek = null)
         runCurrent()
 
-        assertEquals(DayOfWeek.SATURDAY, viewModel.state.value.form.dayOfWeek)
+        assertEquals(setOf(DayOfWeek.SATURDAY), viewModel.state.value.form.days)
     }
 
     /** Later emissions must not overwrite what the user is in the middle of typing. */
@@ -154,7 +154,7 @@ class GymExerciseEditViewModelTest {
 
         val draft = datasource.adds().single().draft
         assertEquals("Squat", draft.name)
-        assertEquals(DayOfWeek.WEDNESDAY, draft.dayOfWeek)
+        assertEquals(setOf(DayOfWeek.WEDNESDAY), draft.days)
         assertEquals(5, draft.setsCount)
         assertEquals(5, draft.repsPerSet)
         assertEquals(80.0, draft.weight)
@@ -177,18 +177,39 @@ class GymExerciseEditViewModelTest {
         assertEquals("Incline bench", update.draft.name)
     }
 
-    /** Moving an exercise to another weekday is how it changes days; there is no other way. */
+    /** A day toggles: tapping one the exercise is on takes it off, tapping another adds it. */
     @Test
-    fun theExerciseCanBeMovedToAnotherWeekday() = runTest {
+    fun daysCanBeAddedAndRemoved() = runTest {
         val datasource = FakeGymDatasource(listOf(bench))
         val viewModel = viewModel(datasource, exerciseId = 1L)
         runCurrent()
 
-        viewModel.onEvent(GymExerciseEditEvent.DayOfWeekChanged(DayOfWeek.FRIDAY))
+        viewModel.onEvent(GymExerciseEditEvent.DayToggled(DayOfWeek.MONDAY))
+        viewModel.onEvent(GymExerciseEditEvent.DayToggled(DayOfWeek.SATURDAY))
         viewModel.onEvent(GymExerciseEditEvent.SaveClicked)
         runCurrent()
 
-        assertEquals(DayOfWeek.FRIDAY, datasource.detailUpdates().single().draft.dayOfWeek)
+        assertEquals(
+            setOf(DayOfWeek.THURSDAY, DayOfWeek.SATURDAY),
+            datasource.detailUpdates().single().draft.days,
+        )
+    }
+
+    @Test
+    fun takingTheLastDayOffIsRefusedAndMarked() = runTest {
+        val datasource = FakeGymDatasource(listOf(exercise(id = 1L, days = setOf(DayOfWeek.MONDAY))))
+        val viewModel = viewModel(datasource, exerciseId = 1L)
+        runCurrent()
+
+        viewModel.onEvent(GymExerciseEditEvent.DayToggled(DayOfWeek.MONDAY))
+        viewModel.onEvent(GymExerciseEditEvent.SaveClicked)
+        runCurrent()
+
+        assertTrue(datasource.detailUpdates().isEmpty())
+        assertTrue(GymField.Days in viewModel.state.value.form)
+
+        viewModel.onEvent(GymExerciseEditEvent.DayToggled(DayOfWeek.TUESDAY))
+        assertFalse(GymField.Days in viewModel.state.value.form, "picking a day clears the mark")
     }
 
     @Test
@@ -378,7 +399,7 @@ class GymExerciseEditViewModelTest {
         runCurrent()
         first.onEvent(GymExerciseEditEvent.NameChanged("Squat"))
         first.onEvent(GymExerciseEditEvent.SetsCountChanged("5"))
-        first.onEvent(GymExerciseEditEvent.DayOfWeekChanged(DayOfWeek.SATURDAY))
+        first.onEvent(GymExerciseEditEvent.DayToggled(DayOfWeek.SATURDAY))
         runCurrent()
 
         val restored = viewModel(datasource, savedStateHandle = savedStateHandle)
@@ -386,7 +407,7 @@ class GymExerciseEditViewModelTest {
 
         assertEquals("Squat", restored.state.value.form.name)
         assertEquals("5", restored.state.value.form.setsCount)
-        assertEquals(DayOfWeek.SATURDAY, restored.state.value.form.dayOfWeek)
+        assertEquals(setOf(DayOfWeek.MONDAY, DayOfWeek.SATURDAY), restored.state.value.form.days)
     }
 
     @Test

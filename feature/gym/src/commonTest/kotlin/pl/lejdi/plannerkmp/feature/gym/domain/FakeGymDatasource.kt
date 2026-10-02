@@ -116,7 +116,7 @@ class FakeGymDatasource(
             id = nextId++,
             name = draft.name,
             comment = draft.comment,
-            dayOfWeek = draft.dayOfWeek,
+            days = draft.days,
             setsCount = draft.setsCount,
             repsPerSet = draft.repsPerSet,
             weight = draft.weight,
@@ -137,7 +137,7 @@ class FakeGymDatasource(
                 it.copy(
                     name = draft.name,
                     comment = draft.comment,
-                    dayOfWeek = draft.dayOfWeek,
+                    days = draft.days,
                     setsCount = draft.setsCount,
                     repsPerSet = draft.repsPerSet,
                     weight = draft.weight,

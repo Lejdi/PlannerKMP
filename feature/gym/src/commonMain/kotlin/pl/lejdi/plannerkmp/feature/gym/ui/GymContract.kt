@@ -1,6 +1,7 @@
 package pl.lejdi.plannerkmp.feature.gym.ui
 
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.serializers.DayOfWeekSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import pl.lejdi.plannerkmp.core.mvi.LoadableState
@@ -19,6 +20,15 @@ import pl.lejdi.plannerkmp.feature.gym.domain.GymDay
 @Serializable
 data class WeightEditor(
     val exerciseId: Long,
+    /**
+     * The page the editor was opened on.
+     *
+     * An exercise planned on several days has a card on each of their pages, and the pager composes
+     * a neighbouring page while it is being swiped to — so an editor keyed by the exercise alone
+     * opened on every one of those cards at once, two fields contending for one focus.
+     */
+    @Serializable(with = DayOfWeekSerializer::class)
+    val dayOfWeek: DayOfWeek,
     val text: String,
     /** Set by a rejected commit, cleared as soon as the user changes the text. */
     val isInvalid: Boolean = false,
@@ -82,13 +92,23 @@ data class GymState(
     fun isPending(id: Long): Boolean = id in pendingExerciseIds
 
     /**
-     * The exercise with this id as the last emission had it, or null once it is gone.
+     * The exercise with this id as the last emission had it, on any page, or null once it is gone.
      *
-     * An exercise belongs to one weekday, so it appears on exactly one of [days] and the first
-     * match is the whole answer.
+     * An exercise planned on several days appears on each of their pages, and any match will do for
+     * what it is used for here — its weight, and whether it still exists — because those are the
+     * same on every page. Its `doneSets` is not: see [findTodayExercise].
      */
     fun findExercise(id: Long): DayExercise? =
         days.firstNotNullOfOrNull { day -> day.exercises.find { it.id == id } }
+
+    /**
+     * The exercise with this id as *today's* page shows it, or null when it is not planned today.
+     *
+     * The one to plan a tick from. Every other page reports zero series done, so a tick planned from
+     * the first match in the week would count up from nothing whenever that match came before today.
+     */
+    fun findTodayExercise(id: Long): DayExercise? =
+        days.find { it.dayOfWeek == today }?.exercises?.find { it.id == id }
 }
 
 /**
@@ -126,7 +146,8 @@ sealed interface GymEvent : MviEvent {
      */
     data class SerieToggled(val exerciseId: Long, val serieNumber: Int) : GymEvent
 
-    data class WeightEditStarted(val exerciseId: Long) : GymEvent
+    /** [dayOfWeek] is the page the card was tapped on — see [WeightEditor.dayOfWeek]. */
+    data class WeightEditStarted(val exerciseId: Long, val dayOfWeek: DayOfWeek) : GymEvent
     data class WeightTextChanged(val text: String) : GymEvent
 
     /**

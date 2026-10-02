@@ -1,0 +1,36 @@
+-- Version 1 -> 2: an exercise moves from one weekday to a set of them.
+--
+-- Every existing exercise keeps exactly the day it had, as its only row in gymExerciseDay, along
+-- with its id, its weight and today's ticks. The days are copied out *before* the rebuild below
+-- drops the column they live in.
+CREATE TABLE gymExerciseDay (
+    exerciseId INTEGER NOT NULL,
+    dayOfWeek INTEGER NOT NULL,
+    PRIMARY KEY (exerciseId, dayOfWeek)
+);
+
+INSERT INTO gymExerciseDay(exerciseId, dayOfWeek)
+SELECT id, dayOfWeek FROM gymExerciseEntity;
+
+-- A table rebuild rather than `ALTER TABLE ... DROP COLUMN`, which needs SQLite 3.35 when minSdk 24
+-- ships 3.9 — this is the sequence SQLite's own documentation gives for a change ALTER cannot make.
+-- The ids are copied explicitly, which is what keeps the rows above pointing at the right exercise,
+-- and the rename carries AUTOINCREMENT's high-water mark in sqlite_sequence along with the table.
+CREATE TABLE gymExerciseEntity_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    comment TEXT,
+    setsCount INTEGER NOT NULL,
+    repsPerSet INTEGER NOT NULL,
+    weight REAL,
+    completedSets INTEGER NOT NULL DEFAULT 0,
+    completedOn TEXT
+);
+
+INSERT INTO gymExerciseEntity_new(id, name, comment, setsCount, repsPerSet, weight, completedSets, completedOn)
+SELECT id, name, comment, setsCount, repsPerSet, weight, completedSets, completedOn
+FROM gymExerciseEntity;
+
+DROP TABLE gymExerciseEntity;
+
+ALTER TABLE gymExerciseEntity_new RENAME TO gymExerciseEntity;

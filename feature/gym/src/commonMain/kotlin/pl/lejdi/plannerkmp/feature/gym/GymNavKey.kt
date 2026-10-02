@@ -35,8 +35,8 @@ sealed interface GymNavKey : NavKey {
     ) : GymNavKey
 
     /**
-     * The form for an exercise that exists. No weekday: it comes from the row when the form seeds,
-     * which is also the only thing that could be right after the exercise has been moved.
+     * The form for an exercise that exists. No weekday: its weekdays come from the row when the
+     * form seeds, which is also the only thing that could be right after they have been changed.
      */
     @Serializable
     data class ExerciseEdit(val exerciseId: Long) : GymNavKey

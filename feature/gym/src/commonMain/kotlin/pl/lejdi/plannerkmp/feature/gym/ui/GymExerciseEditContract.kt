@@ -1,8 +1,13 @@
+// File-wide rather than on the property: the serializer has to reach the set's *elements*, and an
+// annotation on a type argument is a form the formatter rejects.
+@file:UseSerializers(DayOfWeekSerializer::class)
+
 package pl.lejdi.plannerkmp.feature.gym.ui
 
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.serializers.DayOfWeekSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import pl.lejdi.plannerkmp.core.mvi.LoadableState
 import pl.lejdi.plannerkmp.core.mvi.MviEffect
 import pl.lejdi.plannerkmp.core.mvi.MviEvent
@@ -26,8 +31,8 @@ import pl.lejdi.plannerkmp.feature.gym.domain.GymField
 data class GymExerciseForm(
     val name: String = "",
     val comment: String = "",
-    @Serializable(with = DayOfWeekSerializer::class)
-    val dayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
+    /** Empty only until the form is seeded: an add starts on its page's day, an edit on the row's. */
+    val days: Set<DayOfWeek> = emptySet(),
     /** Kept as text, not numbers: a field is mid-edit for as long as the user is typing in it. */
     val setsCount: String = "",
     val repsPerSet: String = "",
@@ -111,7 +116,9 @@ enum class GymExerciseEditMessage {
 sealed interface GymExerciseEditEvent : MviEvent {
     data class NameChanged(val value: String) : GymExerciseEditEvent
     data class CommentChanged(val value: String) : GymExerciseEditEvent
-    data class DayOfWeekChanged(val value: DayOfWeek) : GymExerciseEditEvent
+
+    /** Adds the day if the exercise is not planned on it, removes it if it is. */
+    data class DayToggled(val value: DayOfWeek) : GymExerciseEditEvent
     data class SetsCountChanged(val value: String) : GymExerciseEditEvent
     data class RepsPerSetChanged(val value: String) : GymExerciseEditEvent
     data class WeightChanged(val value: String) : GymExerciseEditEvent

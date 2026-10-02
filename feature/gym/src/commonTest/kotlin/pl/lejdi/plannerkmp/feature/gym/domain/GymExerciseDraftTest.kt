@@ -17,7 +17,7 @@ class GymExerciseDraftTest {
         assertTrue(result is AppResult.Success)
         assertEquals("Bench press", result.data.name)
         assertNull(result.data.comment)
-        assertEquals(DayOfWeek.MONDAY, result.data.dayOfWeek)
+        assertEquals(setOf(DayOfWeek.MONDAY), result.data.days)
         assertEquals(4, result.data.setsCount)
         assertEquals(8, result.data.repsPerSet)
         assertEquals(60.0, result.data.weight)
@@ -39,6 +39,19 @@ class GymExerciseDraftTest {
         assertTrue(result is AppResult.Success)
         assertNull(result.data.comment)
     }
+
+    @Test
+    fun severalDaysAreKept() {
+        val days = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY)
+        val result = create(days = days)
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(days, result.data.days)
+    }
+
+    /** An exercise on no day would be on no page, and so out of reach of Edit and Delete alike. */
+    @Test
+    fun noDaysIsRejected() = assertInvalid(create(days = emptySet()), GymField.Days)
 
     @Test
     fun aBlankNameIsRejected() = assertInvalid(create(name = "  "), GymField.Name)
@@ -100,11 +113,12 @@ class GymExerciseDraftTest {
     /** The point of a Validation carrying a set: one submit reports every bad input. */
     @Test
     fun everyOffendingFieldIsNamedAtOnce() {
-        val result = create(name = "", setsCount = 0, repsPerSet = null, weight = -1.0)
+        val result =
+            create(name = "", days = emptySet(), setsCount = 0, repsPerSet = null, weight = -1.0)
 
         assertTrue(result is AppResult.Failure)
         assertEquals(
-            setOf(GymField.Name, GymField.Sets, GymField.Reps, GymField.Weight),
+            GymField.entries.toSet(),
             result.error.validationFields<GymField>(),
         )
     }
@@ -112,14 +126,14 @@ class GymExerciseDraftTest {
     private fun create(
         name: String = "Bench press",
         comment: String? = null,
-        dayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
+        days: Set<DayOfWeek> = setOf(DayOfWeek.MONDAY),
         setsCount: Int? = 4,
         repsPerSet: Int? = 8,
         weight: Double? = 60.0,
     ) = GymExerciseDraft.create(
         name = name,
         comment = comment,
-        dayOfWeek = dayOfWeek,
+        days = days,
         setsCount = setsCount,
         repsPerSet = repsPerSet,
         weight = weight,

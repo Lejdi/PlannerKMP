@@ -47,26 +47,35 @@ class ObserveGymWeek(
      * A weekday with nothing planned is an empty [GymDay] rather than an absent one: the pager has
      * a page per weekday, and a missing page would be a hole in the week.
      */
-    private fun buildWeek(exercises: List<GymExercise>, today: LocalDate): List<GymDay> {
-        val byWeekday = exercises.groupBy { it.dayOfWeek }
-        return DayOfWeek.entries.map { weekday ->
+    private fun buildWeek(exercises: List<GymExercise>, today: LocalDate): List<GymDay> =
+        DayOfWeek.entries.map { weekday ->
             GymDay(
                 dayOfWeek = weekday,
-                exercises = byWeekday[weekday].orEmpty().map { it.asDayExercise(today) },
+                exercises = exercises
+                    .filter { weekday in it.days }
+                    .map { it.asDayExercise(weekday, today) },
             )
         }
-    }
 }
 
 /**
- * The derivation the whole feature turns on: a tick counts only on the date it was made.
+ * The derivation the whole feature turns on: a tick counts only on the date it was made, and only on
+ * the page for that date's weekday.
+ *
+ * The second half is what an exercise planned on several days needs. Its single completion pair is
+ * shared by every page it appears on, so without the weekday check a tick made on Monday would show
+ * Thursday's card as done too, whenever Thursday's page is looked at on a Monday.
  *
  * The `coerceIn` is not defensive noise. The form may shrink `setsCount` under a row that was
  * already ticked — and it deliberately does not touch the completion pair when it does, because
  * the two writes are separate — so "five of three series done" is a state storage can legitimately
  * hold and this is where it is resolved.
  */
-private fun GymExercise.asDayExercise(today: LocalDate) = DayExercise(
+private fun GymExercise.asDayExercise(weekday: DayOfWeek, today: LocalDate) = DayExercise(
     exercise = this,
-    doneSets = if (completedOn == today) completedSets.coerceIn(0, setsCount) else 0,
+    doneSets = if (weekday == today.dayOfWeek && completedOn == today) {
+        completedSets.coerceIn(0, setsCount)
+    } else {
+        0
+    },
 )

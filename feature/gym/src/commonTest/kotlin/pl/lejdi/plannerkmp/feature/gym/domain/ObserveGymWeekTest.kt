@@ -24,6 +24,9 @@ class ObserveGymWeekTest {
 
     private val todayProvider = FakeTodayProvider(today)
 
+    /** Planned for today, since a tick only ever shows on today's page. */
+    private val todayOnly = setOf(DayOfWeek.FRIDAY)
+
     private fun observeWeek(datasource: FakeGymDatasource) = ObserveGymWeek(
         datasource = datasource,
         todayProvider = todayProvider,
@@ -49,9 +52,9 @@ class ObserveGymWeekTest {
     fun exercisesAreGroupedOntoTheirOwnWeekday() = runTest {
         val datasource = FakeGymDatasource(
             listOf(
-                exercise(id = 1L, name = "Squat", dayOfWeek = DayOfWeek.MONDAY),
-                exercise(id = 2L, name = "Leg press", dayOfWeek = DayOfWeek.MONDAY),
-                exercise(id = 3L, name = "Bench press", dayOfWeek = DayOfWeek.THURSDAY),
+                exercise(id = 1L, name = "Squat", days = setOf(DayOfWeek.MONDAY)),
+                exercise(id = 2L, name = "Leg press", days = setOf(DayOfWeek.MONDAY)),
+                exercise(id = 3L, name = "Bench press", days = setOf(DayOfWeek.THURSDAY)),
             ),
         )
 
@@ -67,27 +70,66 @@ class ObserveGymWeekTest {
     }
 
     @Test
-    fun aTickMadeTodayCounts() = runTest {
+    fun anExerciseOnSeveralDaysAppearsOnEachOfThem() = runTest {
         val datasource = FakeGymDatasource(
-            listOf(exercise(setsCount = 4, completedSets = 2, completedOn = today)),
+            listOf(
+                exercise(id = 1L, name = "Squat", days = setOf(DayOfWeek.MONDAY, DayOfWeek.FRIDAY)),
+                exercise(id = 2L, name = "Bench press", days = setOf(DayOfWeek.FRIDAY)),
+            ),
         )
 
-        val monday = week(datasource).single { it.dayOfWeek == DayOfWeek.MONDAY }.exercises.single()
+        val days = week(datasource).associateBy { it.dayOfWeek }
 
-        assertEquals(2, monday.doneSets)
-        assertFalse(monday.isDone)
+        assertEquals(listOf("Squat"), days.exerciseNames(DayOfWeek.MONDAY))
+        assertEquals(listOf("Squat", "Bench press"), days.exerciseNames(DayOfWeek.FRIDAY))
+        assertTrue(days.exerciseNames(DayOfWeek.WEDNESDAY).isEmpty())
+    }
+
+    /**
+     * One completion pair serves every page an exercise is on, so this is the check that keeps a
+     * tick made today off the other days' cards.
+     */
+    @Test
+    fun aTickMadeTodayShowsOnlyOnTodaysPage() = runTest {
+        val datasource = FakeGymDatasource(
+            listOf(
+                exercise(
+                    days = setOf(DayOfWeek.MONDAY, DayOfWeek.FRIDAY),
+                    setsCount = 2,
+                    completedSets = 2,
+                    completedOn = today,
+                ),
+            ),
+        )
+
+        val days = week(datasource).associateBy { it.dayOfWeek }
+
+        assertTrue(days.getValue(DayOfWeek.FRIDAY).exercises.single().isDone)
+        assertEquals(0, days.getValue(DayOfWeek.MONDAY).exercises.single().doneSets)
+    }
+
+    @Test
+    fun aTickMadeTodayCounts() = runTest {
+        val datasource = FakeGymDatasource(
+            listOf(exercise(days = todayOnly, setsCount = 4, completedSets = 2, completedOn = today)),
+        )
+
+        val onToday = week(datasource).single { it.dayOfWeek == DayOfWeek.FRIDAY }.exercises.single()
+
+        assertEquals(2, onToday.doneSets)
+        assertFalse(onToday.isDone)
     }
 
     @Test
     fun aTickMadeYesterdayDoesNotCount() = runTest {
         val datasource = FakeGymDatasource(
-            listOf(exercise(setsCount = 4, completedSets = 4, completedOn = yesterday)),
+            listOf(exercise(days = todayOnly, setsCount = 4, completedSets = 4, completedOn = yesterday)),
         )
 
-        val monday = week(datasource).single { it.dayOfWeek == DayOfWeek.MONDAY }.exercises.single()
+        val onToday = week(datasource).single { it.dayOfWeek == DayOfWeek.FRIDAY }.exercises.single()
 
-        assertEquals(0, monday.doneSets, "yesterday's ticks are gone without anything clearing them")
-        assertFalse(monday.isDone)
+        assertEquals(0, onToday.doneSets, "yesterday's ticks are gone without anything clearing them")
+        assertFalse(onToday.isDone)
     }
 
     /**
@@ -100,20 +142,20 @@ class ObserveGymWeekTest {
     @Test
     fun theMidnightTickResetsTheDayWithoutAWrite() = runTest {
         val datasource = FakeGymDatasource(
-            listOf(exercise(setsCount = 2, completedSets = 2, completedOn = today)),
+            listOf(exercise(days = todayOnly, setsCount = 2, completedSets = 2, completedOn = today)),
         )
         val weeks = observeWeek(datasource).invoke(Unit)
 
         val before = weeks.first()
         assertTrue(before is AppResult.Success)
-        assertTrue(before.data.single { it.dayOfWeek == DayOfWeek.MONDAY }.exercises.single().isDone)
+        assertTrue(before.data.single { it.dayOfWeek == DayOfWeek.FRIDAY }.exercises.single().isDone)
 
         todayProvider.setToday(tomorrow)
 
         val after = weeks.first()
         assertTrue(after is AppResult.Success)
-        val monday = after.data.single { it.dayOfWeek == DayOfWeek.MONDAY }.exercises.single()
-        assertEquals(0, monday.doneSets)
+        val onToday = after.data.single { it.dayOfWeek == DayOfWeek.FRIDAY }.exercises.single()
+        assertEquals(0, onToday.doneSets)
         assertTrue(datasource.writes.isEmpty(), "the reset is derived, so nothing was written")
     }
 
@@ -121,26 +163,26 @@ class ObserveGymWeekTest {
     @Test
     fun aTickCountAboveTheSeriesCountIsClamped() = runTest {
         val datasource = FakeGymDatasource(
-            listOf(exercise(setsCount = 3, completedSets = 5, completedOn = today)),
+            listOf(exercise(days = todayOnly, setsCount = 3, completedSets = 5, completedOn = today)),
         )
 
-        val monday = week(datasource).single { it.dayOfWeek == DayOfWeek.MONDAY }.exercises.single()
+        val onToday = week(datasource).single { it.dayOfWeek == DayOfWeek.FRIDAY }.exercises.single()
 
-        assertEquals(3, monday.doneSets, "an exercise cannot have more done than it has")
-        assertTrue(monday.isDone)
+        assertEquals(3, onToday.doneSets, "an exercise cannot have more done than it has")
+        assertTrue(onToday.isDone)
     }
 
     /** And it may grow it, which un-finishes the exercise without touching the completion pair. */
     @Test
     fun growingTheSeriesCountStopsTheExerciseBeingDone() = runTest {
         val datasource = FakeGymDatasource(
-            listOf(exercise(setsCount = 5, completedSets = 3, completedOn = today)),
+            listOf(exercise(days = todayOnly, setsCount = 5, completedSets = 3, completedOn = today)),
         )
 
-        val monday = week(datasource).single { it.dayOfWeek == DayOfWeek.MONDAY }.exercises.single()
+        val onToday = week(datasource).single { it.dayOfWeek == DayOfWeek.FRIDAY }.exercises.single()
 
-        assertEquals(3, monday.doneSets)
-        assertFalse(monday.isDone)
+        assertEquals(3, onToday.doneSets)
+        assertFalse(onToday.isDone)
     }
 
     @Test

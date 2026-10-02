@@ -38,8 +38,13 @@ class GymViewModelTest {
     private val today = LocalDate(2026, 9, 18)
     private val tomorrow = today.plus(1, DateTimeUnit.DAY)
 
-    private val bench = exercise(id = 1L, name = "Bench press", setsCount = 4, weight = 60.0)
-    private val rows = exercise(id = 2L, name = "Barbell row", setsCount = 3, weight = 50.0)
+    /** Planned for today, since only today's page can be ticked. */
+    private val todayOnly = setOf(DayOfWeek.FRIDAY)
+
+    private val bench =
+        exercise(id = 1L, name = "Bench press", days = todayOnly, setsCount = 4, weight = 60.0)
+    private val rows =
+        exercise(id = 2L, name = "Barbell row", days = todayOnly, setsCount = 3, weight = 50.0)
 
     @BeforeTest
     fun setUp() {
@@ -81,7 +86,7 @@ class GymViewModelTest {
         val state = viewModel.state.value
         assertFalse(state.isLoading)
         assertEquals(7, state.days.size)
-        assertEquals(listOf(1L), state.days.single { it.dayOfWeek == DayOfWeek.MONDAY }.exercises.map { it.id })
+        assertEquals(listOf(1L), state.days.single { it.dayOfWeek == DayOfWeek.FRIDAY }.exercises.map { it.id })
     }
 
     @Test
@@ -145,7 +150,9 @@ class GymViewModelTest {
     @Test
     fun togglingPlansFromTheLiveListNotTheEvent() = runTest {
         val datasource = FakeGymDatasource(
-            listOf(exercise(id = 1L, setsCount = 4, completedSets = 2, completedOn = today)),
+            listOf(
+                exercise(id = 1L, days = todayOnly, setsCount = 4, completedSets = 2, completedOn = today),
+            ),
         )
         val viewModel = viewModel(datasource)
         runCurrent()
@@ -154,6 +161,76 @@ class GymViewModelTest {
         runCurrent()
 
         assertEquals(3, datasource.completions().single().completedSets)
+    }
+
+    /**
+     * Monday's card of a Monday-and-Friday exercise reports nothing done, and Monday comes first in
+     * the week — so a tick planned from the first match would count up from zero, and tapping the
+     * third box of a row with two already ticked would un-tick nothing and tick three.
+     */
+    @Test
+    fun aTickOnAMultiDayExerciseIsPlannedFromTodaysPage() = runTest {
+        val datasource = FakeGymDatasource(
+            listOf(
+                exercise(
+                    id = 1L,
+                    days = setOf(DayOfWeek.MONDAY, DayOfWeek.FRIDAY),
+                    setsCount = 4,
+                    completedSets = 2,
+                    completedOn = today,
+                ),
+            ),
+        )
+        val viewModel = viewModel(datasource)
+        runCurrent()
+
+        viewModel.onEvent(GymEvent.SerieToggled(exerciseId = 1L, serieNumber = 2))
+        runCurrent()
+
+        assertEquals(1, datasource.completions().single().completedSets, "series 2 was done, so it un-ticks")
+    }
+
+    @Test
+    fun anExerciseNotPlannedTodayCannotBeTicked() = runTest {
+        val datasource = FakeGymDatasource(listOf(exercise(id = 1L, days = setOf(DayOfWeek.MONDAY))))
+        val viewModel = viewModel(datasource)
+        runCurrent()
+
+        viewModel.onEvent(GymEvent.SerieToggled(exerciseId = 1L, serieNumber = 1))
+        runCurrent()
+
+        assertTrue(datasource.completions().isEmpty())
+    }
+
+    /** One row, so a weight changed from one page is the weight every other page shows. */
+    @Test
+    fun aWeightEditedOnOnePageShowsOnEveryDayTheExerciseIsOn() = runTest {
+        val days = setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
+        val datasource = FakeGymDatasource(listOf(exercise(id = 1L, days = days, weight = 60.0)))
+        val viewModel = viewModel(datasource)
+        runCurrent()
+
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.MONDAY))
+        viewModel.onEvent(GymEvent.WeightTextChanged("62.5"))
+        viewModel.onEvent(GymEvent.WeightEditCommitted)
+        runCurrent()
+
+        val weights = viewModel.state.value.days
+            .filter { it.dayOfWeek in days }
+            .map { day -> day.exercises.single().exercise.weight }
+        assertEquals(listOf(62.5, 62.5, 62.5), weights)
+    }
+
+    /** The editor belongs to the card it was opened on, not to every card of that exercise. */
+    @Test
+    fun theWeightEditorRemembersThePageItWasOpenedOn() = runTest {
+        val days = setOf(DayOfWeek.MONDAY, DayOfWeek.FRIDAY)
+        val viewModel = viewModel(FakeGymDatasource(listOf(exercise(id = 1L, days = days))))
+        runCurrent()
+
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.MONDAY))
+
+        assertEquals(DayOfWeek.MONDAY, viewModel.state.value.weightEditor?.dayOfWeek)
     }
 
     @Test
@@ -223,7 +300,7 @@ class GymViewModelTest {
         val viewModel = viewModel(FakeGymDatasource(listOf(bench)))
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
 
         assertEquals("60", viewModel.state.value.weightEditor?.text)
     }
@@ -233,7 +310,7 @@ class GymViewModelTest {
         val viewModel = viewModel(FakeGymDatasource(listOf(exercise(id = 1L, weight = null))))
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
 
         assertEquals("", viewModel.state.value.weightEditor?.text)
     }
@@ -252,7 +329,7 @@ class GymViewModelTest {
         val viewModel = viewModel(datasource)
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         viewModel.onEvent(GymEvent.WeightEditorFocusChanged(isFocused = false))
         runCurrent()
 
@@ -266,7 +343,7 @@ class GymViewModelTest {
         val viewModel = viewModel(datasource)
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         viewModel.onEvent(GymEvent.WeightEditorFocusChanged(isFocused = true))
         viewModel.onEvent(GymEvent.WeightTextChanged("82,5"))
         viewModel.onEvent(GymEvent.WeightEditorFocusChanged(isFocused = false))
@@ -286,7 +363,7 @@ class GymViewModelTest {
         val datasource = FakeGymDatasource(listOf(bench))
         val first = viewModel(datasource, savedStateHandle)
         runCurrent()
-        first.onEvent(GymEvent.WeightEditStarted(1L))
+        first.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         first.onEvent(GymEvent.WeightEditorFocusChanged(isFocused = true))
         first.onEvent(GymEvent.WeightTextChanged("77.5"))
         runCurrent()
@@ -307,7 +384,7 @@ class GymViewModelTest {
         val viewModel = viewModel(datasource)
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         viewModel.onEvent(GymEvent.WeightTextChanged("82,5"))
         viewModel.onEvent(GymEvent.WeightEditCommitted)
         runCurrent()
@@ -322,7 +399,7 @@ class GymViewModelTest {
         val viewModel = viewModel(datasource)
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         viewModel.onEvent(GymEvent.WeightTextChanged(""))
         viewModel.onEvent(GymEvent.WeightEditCommitted)
         runCurrent()
@@ -338,7 +415,7 @@ class GymViewModelTest {
         val viewModel = viewModel(datasource)
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         viewModel.onEvent(GymEvent.WeightTextChanged("heavy"))
         viewModel.onEvent(GymEvent.WeightEditCommitted)
         runCurrent()
@@ -356,7 +433,7 @@ class GymViewModelTest {
         val viewModel = viewModel(datasource)
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         viewModel.onEvent(GymEvent.WeightTextChanged("5000"))
         viewModel.onEvent(GymEvent.WeightEditCommitted)
         runCurrent()
@@ -371,7 +448,7 @@ class GymViewModelTest {
         val viewModel = viewModel(datasource)
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         viewModel.onEvent(GymEvent.WeightTextChanged("-5"))
         viewModel.onEvent(GymEvent.WeightEditCommitted)
         runCurrent()
@@ -385,7 +462,7 @@ class GymViewModelTest {
         val viewModel = viewModel(FakeGymDatasource(listOf(bench)))
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         viewModel.onEvent(GymEvent.WeightTextChanged("heavy"))
         viewModel.onEvent(GymEvent.WeightEditCommitted)
         runCurrent()
@@ -400,7 +477,7 @@ class GymViewModelTest {
         val viewModel = viewModel(datasource)
         runCurrent()
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         viewModel.onEvent(GymEvent.WeightTextChanged("99"))
         viewModel.onEvent(GymEvent.WeightEditCancelled)
         runCurrent()
@@ -416,7 +493,7 @@ class GymViewModelTest {
         runCurrent()
         datasource.failNext(GymWrite.UpdateWeight, DomainError.Database("boom"))
 
-        viewModel.onEvent(GymEvent.WeightEditStarted(1L))
+        viewModel.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         viewModel.onEvent(GymEvent.WeightTextChanged("70"))
         viewModel.onEvent(GymEvent.WeightEditCommitted)
         runCurrent()
@@ -430,7 +507,7 @@ class GymViewModelTest {
         val datasource = FakeGymDatasource(listOf(bench))
         val first = viewModel(datasource, savedStateHandle)
         runCurrent()
-        first.onEvent(GymEvent.WeightEditStarted(1L))
+        first.onEvent(GymEvent.WeightEditStarted(1L, DayOfWeek.FRIDAY))
         first.onEvent(GymEvent.WeightTextChanged("77.5"))
         runCurrent()
 

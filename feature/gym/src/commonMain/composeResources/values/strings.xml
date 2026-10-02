@@ -26,14 +26,15 @@
     <string name="gym_form_title_edit">Edit exercise</string>
     <string name="gym_form_name">Exercise</string>
     <string name="gym_form_comment">Note</string>
-    <string name="gym_form_weekday">Day</string>
-    <string name="gym_form_pick_day">Move to %1$s</string>
+    <string name="gym_form_weekday">Days</string>
+    <string name="gym_form_pick_day">Plan on %1$s</string>
     <string name="gym_form_sets">Series</string>
     <string name="gym_form_reps">Reps per serie</string>
     <string name="gym_form_weight">Weight (kg)</string>
     <string name="gym_form_save">Save</string>
 
     <string name="gym_error_name_blank">Enter an exercise name</string>
+    <string name="gym_error_days_empty">Pick at least one day</string>
     <string name="gym_error_sets_invalid">Enter a number of series between 1 and 20</string>
     <string name="gym_error_reps_invalid">Enter a number of reps between 1 and 1000</string>
     <string name="gym_error_weight_field_invalid">Leave empty for bodyweight, or enter 0 to 1000</string>
@@ -41,5 +42,5 @@
     <string name="gym_error_delete_failed">Could not delete this exercise</string>
 
     <string name="gym_delete_title">Delete this exercise?</string>
-    <string name="gym_delete_message">It will be gone for good, along with today\'s ticks.</string>
+    <string name="gym_delete_message">It will be gone for good from every day it is planned on, along with today\'s ticks.</string>
 </resources>

@@ -1,5 +1,6 @@
 package pl.lejdi.plannerkmp.feature.gym.data
 
+import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,21 +38,7 @@ class SqlDelightGymDatasourceTest {
     @BeforeTest
     fun setUp() {
         driver = inMemorySqlDriver(GymDatabase.Schema)
-        datasource = SqlDelightGymDatasource(
-            GymDatabase(
-                driver,
-                gymExerciseEntityAdapter = GymExerciseEntity.Adapter(
-                    dayOfWeekAdapter = DayOfWeekColumnAdapter,
-                    completedOnAdapter = LocalDateColumnAdapter,
-                ),
-            ).gymExerciseEntityQueries,
-            appScope,
-            // Unconfined as the io dispatcher: safeQuery's withContext then runs the blocking
-            // driver call inline on the test thread, so runTest never sees an idle scheduler and
-            // fast-forwards into safeQuery's timeout.
-            TestCoroutineDispatchers(Dispatchers.Unconfined),
-            NoOpLogger(),
-        )
+        datasource = gymDatasource(driver, appScope)
     }
 
     @AfterTest
@@ -69,14 +56,14 @@ class SqlDelightGymDatasourceTest {
     private fun draft(
         name: String = "Bench press",
         comment: String? = "slow eccentric",
-        dayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
+        days: Set<DayOfWeek> = setOf(DayOfWeek.MONDAY),
         setsCount: Int = 4,
         repsPerSet: Int = 8,
         weight: Double? = 60.0,
     ) = GymExerciseDraft.ofStored(
         name = name,
         comment = comment,
-        dayOfWeek = dayOfWeek,
+        days = days,
         setsCount = setsCount,
         repsPerSet = repsPerSet,
         weight = weight,
@@ -93,7 +80,7 @@ class SqlDelightGymDatasourceTest {
 
         assertEquals("Bench press", stored.name)
         assertEquals("slow eccentric", stored.comment)
-        assertEquals(DayOfWeek.MONDAY, stored.dayOfWeek)
+        assertEquals(setOf(DayOfWeek.MONDAY), stored.days)
         assertEquals(4, stored.setsCount)
         assertEquals(8, stored.repsPerSet)
         assertEquals(60.0, stored.weight)
@@ -119,25 +106,47 @@ class SqlDelightGymDatasourceTest {
     @Test
     fun everyWeekdayRoundTrips() = runTest {
         DayOfWeek.entries.forEach { weekday ->
-            datasource.addExercise(draft(name = weekday.name, dayOfWeek = weekday))
+            datasource.addExercise(draft(name = weekday.name, days = setOf(weekday)))
         }
 
         val stored = storedExercises()
-        assertEquals(DayOfWeek.entries.toList(), stored.map { it.dayOfWeek })
+        assertEquals(DayOfWeek.entries.map { setOf(it) }, stored.map { it.days })
         assertEquals(DayOfWeek.entries.map { it.name }, stored.map { it.name })
+    }
+
+    /** One row, however many days: the join folds back into a single exercise. */
+    @Test
+    fun anExerciseOnSeveralDaysIsOneExercise() = runTest {
+        val days = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY)
+        datasource.addExercise(draft(days = days))
+
+        val stored = storedExercises().single()
+        assertEquals(days, stored.days)
+
+        val single = datasource.observeExercise(stored.id).first()
+        assertTrue(single is AppResult.Success)
+        assertEquals(days, single.data?.days)
     }
 
     /** The ISO day number is stored so that the query's own ORDER BY is calendar order. */
     @Test
-    fun theListIsOrderedByWeekdayThenId() = runTest {
-        datasource.addExercise(draft(name = "Friday first insert", dayOfWeek = DayOfWeek.FRIDAY))
-        datasource.addExercise(draft(name = "Monday second insert", dayOfWeek = DayOfWeek.MONDAY))
-        datasource.addExercise(draft(name = "Monday third insert", dayOfWeek = DayOfWeek.MONDAY))
+    fun theDaysComeBackInCalendarOrder() = runTest {
+        datasource.addExercise(draft(days = setOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.THURSDAY)))
 
         assertEquals(
-            listOf("Monday second insert", "Monday third insert", "Friday first insert"),
-            storedExercises().map { it.name },
+            listOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY, DayOfWeek.SUNDAY),
+            storedExercises().single().days.toList(),
         )
+    }
+
+    /** Within a page, exercises stay in the order they were added in. */
+    @Test
+    fun theListIsInTheOrderTheExercisesWereAdded() = runTest {
+        datasource.addExercise(draft(name = "First", days = setOf(DayOfWeek.FRIDAY)))
+        datasource.addExercise(draft(name = "Second", days = setOf(DayOfWeek.MONDAY, DayOfWeek.FRIDAY)))
+        datasource.addExercise(draft(name = "Third", days = setOf(DayOfWeek.MONDAY)))
+
+        assertEquals(listOf("First", "Second", "Third"), storedExercises().map { it.name })
     }
 
     @Test
@@ -185,13 +194,18 @@ class SqlDelightGymDatasourceTest {
 
         datasource.updateDetails(
             stored.id,
-            draft(name = "Incline bench", comment = null, dayOfWeek = DayOfWeek.THURSDAY, setsCount = 3),
+            draft(
+                name = "Incline bench",
+                comment = null,
+                days = setOf(DayOfWeek.THURSDAY, DayOfWeek.SATURDAY),
+                setsCount = 3,
+            ),
         )
 
         val updated = storedExercises().single()
         assertEquals("Incline bench", updated.name)
         assertNull(updated.comment)
-        assertEquals(DayOfWeek.THURSDAY, updated.dayOfWeek)
+        assertEquals(setOf(DayOfWeek.THURSDAY, DayOfWeek.SATURDAY), updated.days, "days are replaced, not added to")
         assertEquals(3, updated.setsCount)
         assertEquals(2, updated.completedSets, "editing an exercise must not un-tick it")
         assertEquals(today, updated.completedOn)
@@ -223,7 +237,7 @@ class SqlDelightGymDatasourceTest {
         val updated = storedExercises().single()
         assertEquals("Bench press", updated.name, "ticking a series must not revert an edit")
         assertEquals("slow eccentric", updated.comment)
-        assertEquals(DayOfWeek.MONDAY, updated.dayOfWeek)
+        assertEquals(setOf(DayOfWeek.MONDAY), updated.days)
         assertEquals(4, updated.setsCount)
         assertEquals(8, updated.repsPerSet)
         assertEquals(60.0, updated.weight, "ticking a series must not revert a weight edit")
@@ -245,6 +259,15 @@ class SqlDelightGymDatasourceTest {
         datasource.deleteExercise(stored.id)
 
         assertTrue(storedExercises().isEmpty())
+        assertEquals(0L, dayRowCount(), "there is no foreign key, so the delete takes its days itself")
+    }
+
+    /** The row is checked before its days are rewritten, so a missing one leaves nothing behind. */
+    @Test
+    fun updatingDetailsOfAMissingRowWritesNoDays() = runTest {
+        datasource.updateDetails(404L, draft(name = "Gone"))
+
+        assertEquals(0L, dayRowCount())
     }
 
     @Test
@@ -267,8 +290,33 @@ class SqlDelightGymDatasourceTest {
         assertNotFound(datasource.deleteExercise(404L))
     }
 
+    private fun dayRowCount(): Long = driver.executeQuery(
+        identifier = null,
+        sql = "SELECT COUNT(*) FROM gymExerciseDay",
+        mapper = { cursor -> QueryResult.Value(if (cursor.next().value) cursor.getLong(0) else null) },
+        parameters = 0,
+    ).value ?: 0L
+
     private fun assertNotFound(result: AppResult<Unit>) {
         assertTrue(result is AppResult.Failure)
         assertTrue(result.error is DomainError.NotFound, "the row is gone, and no retry will help")
     }
 }
+
+/**
+ * The datasource as the Koin module builds it, over whichever driver a test supplies.
+ *
+ * Unconfined as the io dispatcher: safeQuery's withContext then runs the blocking driver call
+ * inline on the test thread, so runTest never sees an idle scheduler and fast-forwards into
+ * safeQuery's timeout.
+ */
+internal fun gymDatasource(driver: SqlDriver, appScope: CoroutineScope) = SqlDelightGymDatasource(
+    GymDatabase(
+        driver,
+        gymExerciseDayAdapter = GymExerciseDay.Adapter(dayOfWeekAdapter = DayOfWeekColumnAdapter),
+        gymExerciseEntityAdapter = GymExerciseEntity.Adapter(completedOnAdapter = LocalDateColumnAdapter),
+    ).gymExerciseEntityQueries,
+    appScope,
+    TestCoroutineDispatchers(Dispatchers.Unconfined),
+    NoOpLogger(),
+)

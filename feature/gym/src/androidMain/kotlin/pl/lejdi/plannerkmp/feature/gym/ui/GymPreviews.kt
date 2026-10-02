@@ -31,7 +31,7 @@ private fun previewExercise(
         id = id,
         name = name,
         comment = comment,
-        dayOfWeek = TODAY_WEEKDAY,
+        days = setOf(TODAY_WEEKDAY),
         setsCount = setsCount,
         repsPerSet = repsPerSet,
         weight = weight,
@@ -109,7 +109,7 @@ private fun GymWeightEditorPreview() = PlannerTheme {
     GymContent(
         state = state(
             days = week(listOf(BENCH, ROWS)),
-            weightEditor = WeightEditor(exerciseId = 1L, text = "82.5"),
+            weightEditor = WeightEditor(exerciseId = 1L, dayOfWeek = TODAY_WEEKDAY, text = "82.5"),
         ),
         snackbarHostState = SnackbarHostState(),
         onEvent = {},
@@ -123,7 +123,12 @@ private fun GymWeightEditorInvalidPreview() = PlannerTheme {
     GymContent(
         state = state(
             days = week(listOf(BENCH, ROWS)),
-            weightEditor = WeightEditor(exerciseId = 1L, text = "heavy", isInvalid = true),
+            weightEditor = WeightEditor(
+                exerciseId = 1L,
+                dayOfWeek = TODAY_WEEKDAY,
+                text = "heavy",
+                isInvalid = true,
+            ),
         ),
         snackbarHostState = SnackbarHostState(),
         onEvent = {},
@@ -181,7 +186,7 @@ private fun GymOtherWeekdayPreview() = PlannerTheme {
 private val SEEDED_FORM = GymExerciseForm(
     name = "Bench press",
     comment = "slow eccentric",
-    dayOfWeek = DayOfWeek.MONDAY,
+    days = setOf(DayOfWeek.MONDAY, DayOfWeek.THURSDAY),
     setsCount = "4",
     repsPerSet = "8",
     weight = "60",
@@ -192,7 +197,7 @@ private val SEEDED_FORM = GymExerciseForm(
 @Composable
 private fun GymFormAddPreview() = PlannerTheme {
     GymExerciseEditContent(
-        state = GymExerciseEditState(form = GymExerciseForm(dayOfWeek = TODAY_WEEKDAY)),
+        state = GymExerciseEditState(form = GymExerciseForm(days = setOf(TODAY_WEEKDAY))),
         snackbarHostState = SnackbarHostState(),
         onEvent = {},
     )
@@ -220,7 +225,7 @@ private fun GymFormInvalidPreview() = PlannerTheme {
                 setsCount = "0",
                 repsPerSet = "abc",
                 weight = "heavy",
-                invalidFields = setOf(GymField.Name, GymField.Sets, GymField.Reps, GymField.Weight),
+                invalidFields = GymField.entries.toSet(),
             ),
         ),
         snackbarHostState = SnackbarHostState(),
